@@ -1,0 +1,44 @@
+name:          hisss
+build-type:    Simple
+cabal-version: >= 1.10
+category:      Application
+version:       0.1
+stability:     unstable
+author:        Jonas Juselius <jonas.juselius@uit.no>,
+maintainer:    Jonas Juselius <jonas.juselius@uit.no>
+license:       OtherLicense
+license-file:  LICENSE.md
+copyright:     Copyright (C) 2014 Jonas Juselius
+homepage:      https://github.com/bakerjonas/hisss
+bug-reports:   https://github.com/issues
+synopsis:      Haskell Interactive Strangler Snake Simulator
+description:
+    HISSS Snake game
+    .
+    A simple snake game written in order to experiment with threepenny-gui.
+
+extra-source-files:
+    README.md
+    .gitignore
+
+source-repository head
+    type: git
+    location: git@github.com:bakerjonas/hisss.git
+
+executable hisss.bin
+    main-is: snake.hs
+    build-depends:
+          base
+        , mtl
+        , threepenny-gui
+    other-modules: Paths_
+    hs-source-dirs: .
+    default-language: Haskell2010
+    ghc-options:
+        -Wall -O2
+        -threaded
+        -fwarn-tabs
+        -fdicts-cheap
+        -funbox-strict-fields
+        -fmax-simplifier-iterations=10
+
