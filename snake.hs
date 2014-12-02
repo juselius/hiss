@@ -18,10 +18,13 @@ data Snake = Snake {
     , dir :: Direction
     }
 
+newSnake :: Snake
+newSnake = Snake [(10.0 * x, 100.0) | x <- [9,8..1]] R
+
 setup :: Window -> UI ()
 setup window = void $ do
     return window # set title "Snakeu"
-    timer <- UI.timer # set UI.interval 500
+    timer <- UI.timer # set UI.interval 250
     canvas <- UI.canvas
         # set UI.height height
         # set UI.width width
@@ -30,7 +33,7 @@ setup window = void $ do
     stop <- UI.button # set text "Stop"
     restart <- UI.button # set text "Restart"
     t <- liftIO $ newIORef (0::Int)
-    snake <- liftIO $ newIORef (Snake [(50.0, 60.0)] R)
+    snake <- liftIO $ newIORef newSnake
     foo <- string "0"
     keycode <- string "n/a"
     bdy <- getBody window
@@ -41,9 +44,15 @@ setup window = void $ do
         , row [element keycode]
         ]]
 
+    drawSnake "green" canvas newSnake
+
     on UI.click start   . const $ UI.start timer
     on UI.click stop    . const $ UI.stop timer
-    on UI.click restart . const $ UI.clearCanvas canvas
+    on UI.click restart . const $ do
+        UI.clearCanvas canvas
+        liftIO $ writeIORef t 0
+        liftIO $ writeIORef snake newSnake
+        drawSnake "green" canvas newSnake
 
     on UI.keydown bdy $ \k -> liftIO $ do
         s <- readIORef snake
@@ -62,22 +71,32 @@ setup window = void $ do
         liftIO $ modifyIORef t (+1)
         t' <- liftIO $ readIORef t
         element foo # set text (show t')
-        snake'' <- liftIO $ readIORef snake
-        drawSnake "white" canvas snake''
+        delTail snake canvas
         liftIO $ modifyIORef snake $ moveSnake
         snake' <- liftIO $ readIORef snake
         drawSnake "green" canvas snake'
 
+delTail :: IORef Snake -> Element -> UI ()
+delTail s canvas = do
+    s' <- liftIO $ readIORef s
+    let h = last $ segment s'
+        snake = s' { segment = init (segment s') }
+    liftIO $ writeIORef s snake
+    element canvas # set UI.fillStyle (UI.htmlColor "white")
+    UI.fillRect h 10 10 canvas
+
 moveSnake :: Snake -> Snake
 moveSnake s@(Snake b d) = case d of
-    U -> s { segment = map (\(x,y) -> (x, y - tt)) b }
-    D -> s { segment = map (\(x,y) -> (x, y + tt)) b }
-    R -> s { segment = map (\(x,y) -> (x + tt, y)) b }
-    L -> s { segment = map (\(x,y) -> (x - tt, y)) b }
+    U -> s { segment = (x, y - tt) : b }
+    D -> s { segment = (x, y + tt) : b }
+    R -> s { segment = (x + tt, y) : b }
+    L -> s { segment = (x - tt, y) : b }
     where
+        (x, y) = head b
         tt = 10.0
 
 drawSnake :: String -> Element -> Snake -> UI ()
 drawSnake color canvas snake = do
     element canvas # set UI.fillStyle (UI.htmlColor color)
     mapM_ (\h -> UI.fillRect h 10 10 canvas) (segment snake)
+
