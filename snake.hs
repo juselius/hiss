@@ -1,3 +1,4 @@
+import Data.Maybe
 import Control.Monad
 import Data.IORef
 import System.Exit
@@ -25,14 +26,14 @@ newSnake = Snake [(10.0 * x, 100.0) | x <- [9,8..1]] R
 setup :: Window -> UI ()
 setup window = void $ do
     return window # set title "Snakeu"
-    timer <- UI.timer # set UI.interval 250
+    timer <- UI.timer # set UI.interval 100
     canvas <- UI.canvas
         # set UI.height height
         # set UI.width width
         # set style [("border", "solid blue 3px")]
+        # set UI.textFont "24px sans-serif"
     start <- UI.button # set text "Start"
     stop <- UI.button # set text "Stop"
-    restart <- UI.button # set text "Restart"
     t <- liftIO $ newIORef (0::Int)
     snake <- liftIO $ newIORef newSnake
     curtime <- string "0"
@@ -40,31 +41,30 @@ setup window = void $ do
     bdy <- getBody window
     getBody window #+ [column [
           element canvas
-        , row [element start, element stop, element restart]
+        , row [element start, element stop]
         , row [element curtime]
         ]]
-    drawSnake "green" canvas snake
 
-    on UI.click start   . const $ UI.start timer
-    on UI.click stop    . const $ UI.stop timer
-    on UI.click restart . const $ do
+    on UI.click start   . const $ do
         UI.clearCanvas canvas
         liftIO $ writeIORef t 0
         liftIO $ writeIORef snake newSnake
         drawSnake "green" canvas snake
+        UI.start timer
+    on UI.click stop    . const $ UI.stop timer
 
     on UI.keydown bdy $ \k -> do
         running <- get UI.running timer
-        if running
-            then do
-                liftIO $ setHeading snake k
-                if isMove k
-                    then updateSnake canvas t snake
-                    else return ()
-            else return ()
+        if running && isMove k
+        then do
+            liftIO $ setHeading snake k
+            updateSnake canvas t snake
+            validateSnake canvas timer snake
+        else return ()
 
     on UI.tick timer $ const $ do
         updateSnake canvas t snake
+        s <- validateSnake canvas timer snake
         t' <- liftIO $ readIORef t
         element curtime # set text (show t')
 
@@ -74,14 +74,28 @@ updateSnake canvas time snake = do
         t <- liftIO $ readIORef time
         moveSnake canvas snake
 
-delTail :: IORef Snake -> Element -> UI ()
-delTail s canvas = do
-    s' <- liftIO $ readIORef s
-    let h = last $ trunk s'
-        snake = s' { trunk = init (trunk s') }
-    liftIO $ writeIORef s snake
-    element canvas # set UI.fillStyle (UI.htmlColor "white")
-    UI.fillRect h 10 10 canvas
+validateSnake :: Element -> UI.Timer -> IORef Snake -> UI ()
+validateSnake canvas timer snake = do
+    s <- liftIO $ readIORef snake
+    if isInside s
+        then return ()
+        else gameOver canvas timer
+    where
+        isInside :: Snake -> Bool
+        isInside s'
+            | x <= 0.0 || x >= fromIntegral width = False
+            | y <= 0.0 || y >= fromIntegral height = False
+            | any (\a' -> a' == a) b = False
+            | otherwise = True
+            where
+                a@(x, y) = head $ trunk s'
+                b = tail $ trunk s'
+
+gameOver :: Element -> UI.Timer -> UI ()
+gameOver canvas timer = do
+    UI.clearCanvas canvas
+    UI.stop timer
+    UI.fillText "GAME OVER" (175.0, 200.0) canvas
 
 moveSnake :: Element -> IORef Snake -> UI ()
 moveSnake canvas snake = do
@@ -101,6 +115,15 @@ moveSnake canvas snake = do
                     L -> s { trunk = (x - tt, y) : b }
                     where
                         tt = 10.0
+
+delTail :: IORef Snake -> Element -> UI ()
+delTail s canvas = do
+    s' <- liftIO $ readIORef s
+    let h = last $ trunk s'
+        snake = s' { trunk = init (trunk s') }
+    liftIO $ writeIORef s snake
+    element canvas # set UI.fillStyle (UI.htmlColor "white")
+    UI.fillRect h 10 10 canvas
 
 drawSnake :: String -> Element -> IORef Snake -> UI ()
 drawSnake color canvas snake = do
