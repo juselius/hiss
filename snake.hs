@@ -85,9 +85,10 @@ setup window = void $ do
     t <- liftIO $ newIORef (0::Int)
     snake <- liftIO $ newIORef newSnake
     food <- liftIO $ newIORef noFood
-
     timer <- UI.timer # set UI.interval 100
+
     on UI.click start . const $ do
+        return timer # set UI.interval 100
         UI.clearCanvas canvas
         wipeCanvas canvas
         liftIO $ do
