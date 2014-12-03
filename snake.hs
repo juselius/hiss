@@ -66,8 +66,11 @@ setup window = void $ do
     timer <- UI.timer # set UI.interval 100
     on UI.click start   . const $ do
         UI.clearCanvas canvas
-        liftIO $ writeIORef t 0
-        liftIO $ writeIORef snake newSnake
+        liftIO $ do
+            writeIORef t 0
+            writeIORef score 0
+            writeIORef food []
+            writeIORef snake newSnake
         drawSnake "green" canvas snake
         UI.start timer
     on UI.click stop . const $ UI.stop timer
@@ -88,6 +91,9 @@ setup window = void $ do
         s <- validateSnake canvas timer snake
         t' <- liftIO $ readIORef t
         score' <- liftIO $ readIORef score
+        when (mod score' 10 == 0) . void $
+            return timer # set UI.interval
+                (truncate $ 100 - (5 * fromIntegral score' / 10))
         element curtime # set text (show t')
         element curscore # set text (show score')
 
@@ -128,8 +134,8 @@ updateFood canvas food = liftIO $ do
         newFood = do
             psize <- randomRIO (1,5)
             slife <- randomRIO (50,150)
-            x <- randomRIO (0, 50) :: IO Int
-            y <- randomRIO (0, 40) :: IO Int
+            x <- randomRIO (0, 25) :: IO Int
+            y <- randomRIO (0, 20) :: IO Int
             let x' = fromIntegral $ x * marker
                 y' = fromIntegral $ y * marker
             return $ Food (x', y') psize slife
@@ -145,8 +151,8 @@ validateSnake canvas timer snake = do
     where
         offside :: Snake -> Bool
         offside s'
-            | x < 0.0 || x > fromIntegral width = True
-            | y < 0.0 || y > fromIntegral height = True
+            | x < 0.0 || x >= fromIntegral width = True
+            | y < 0.0 || y >= fromIntegral height = True
             | a `elem` b = True
             | otherwise = False
             where
@@ -207,9 +213,9 @@ drawFood canvas food = do
     where
         draw x = do
             let c = case portionSize x of
-                    1 -> "yellow"
+                    1 -> "blue"
                     2 -> "red"
-                    3 -> "green"
+                    3 -> "pink"
                     _ -> "white"
             element canvas # set UI.fillStyle (UI.htmlColor c)
             UI.fillRect (aisle x) m m canvas
