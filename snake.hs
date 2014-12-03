@@ -26,12 +26,13 @@ data Food = Food {
 main :: IO ()
 main = startGUI defaultConfig setup
 
-width, height :: Int
+width, height, marker :: Int
 width = 500
 height = 400
+marker = 20
 
 newSnake :: Snake
-newSnake = Snake [(10.0 * x, 100.0) | x <- [9,8..1]] R 0
+newSnake = Snake [(fromIntegral $ marker * x, 100.0) | x <- [5,4..1]] R 0
 
 noFood :: [Food]
 noFood = []
@@ -129,8 +130,8 @@ updateFood canvas food = liftIO $ do
             slife <- randomRIO (50,150)
             x <- randomRIO (0, 50) :: IO Int
             y <- randomRIO (0, 40) :: IO Int
-            let x' = fromIntegral x * 10.0
-                y' = fromIntegral y * 10.0
+            let x' = fromIntegral $ x * marker
+                y' = fromIntegral $ y * marker
             return $ Food (x', y') psize slife
         cropFood f =
                 filter (\x -> shelfLife x >= 0) $ decLife f
@@ -144,8 +145,8 @@ validateSnake canvas timer snake = do
     where
         offside :: Snake -> Bool
         offside s'
-            | x <= 0.0 || x >= fromIntegral width = True
-            | y <= 0.0 || y >= fromIntegral height = True
+            | x < 0.0 || x > fromIntegral width = True
+            | y < 0.0 || y > fromIntegral height = True
             | a `elem` b = True
             | otherwise = False
             where
@@ -177,7 +178,7 @@ moveSnake canvas snake = do
                     R -> s { trunk = (x + tt, y) : b }
                     L -> s { trunk = (x - tt, y) : b }
                     where
-                        tt = 10.0
+                        tt = fromIntegral marker
 
 delTail :: IORef Snake -> Element -> UI ()
 delTail s canvas = do
@@ -186,13 +187,17 @@ delTail s canvas = do
         snake = s' { trunk = init (trunk s') }
     liftIO $ writeIORef s snake
     element canvas # set UI.fillStyle (UI.htmlColor "white")
-    UI.fillRect h 10 10 canvas
+    UI.fillRect h m m canvas
+    where
+        m = fromIntegral marker
 
 drawSnake :: String -> Element -> IORef Snake -> UI ()
 drawSnake color canvas snake = do
     s <- liftIO $ readIORef snake
     element canvas # set UI.fillStyle (UI.htmlColor color)
-    mapM_ (\h -> UI.fillRect h 10 10 canvas) (trunk s)
+    mapM_ (\h -> UI.fillRect h m m canvas) (trunk s)
+    where
+        m = fromIntegral marker
 
 drawFood :: Element -> IORef [Food] -> UI ()
 drawFood canvas food = do
@@ -207,10 +212,11 @@ drawFood canvas food = do
                     3 -> "green"
                     _ -> "white"
             element canvas # set UI.fillStyle (UI.htmlColor c)
-            UI.fillRect (aisle x) 10 10 canvas
+            UI.fillRect (aisle x) m m canvas
         clearFood x = when (shelfLife x < 1) $ do
                 element canvas # set UI.fillStyle (UI.htmlColor "white")
-                UI.fillRect (aisle x) 10 10 canvas
+                UI.fillRect (aisle x) m m canvas
+        m = fromIntegral marker
 
 
 isMove :: Int -> Bool
