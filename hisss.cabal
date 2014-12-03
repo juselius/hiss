@@ -21,6 +21,10 @@ extra-source-files:
     README.md
     .gitignore
 
+data-dir:           static
+data-files:         img/*.png, img/icons/*.png
+                    css/*.css
+
 source-repository head
     type: git
     location: git@github.com:bakerjonas/hisss.git
