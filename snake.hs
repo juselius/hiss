@@ -48,15 +48,16 @@ setup window = void $ do
     stop <- UI.button # set text "Stop"
     curtime <- string "0"
     timeLabel <- string "t = "
-    score <- string "0"
+    curscore <- string "0"
     scoreLabel <- string "SCORE: "
     getBody window #+ [column [
           element canvas
         , row [element start, element stop]
-        , row [element scoreLabel, element score]
+        , row [element scoreLabel, element curscore]
         , row [element timeLabel, element curtime]
         ]]
 
+    score <- liftIO $ newIORef (0::Int)
     t <- liftIO $ newIORef (0::Int)
     snake <- liftIO $ newIORef newSnake
     food <- liftIO $ newIORef noFood
@@ -80,17 +81,39 @@ setup window = void $ do
 
     on UI.tick timer $ const $ do
         updateFood canvas food
+        feedSnake snake food score
         drawFood canvas food
         updateSnake canvas t snake
         s <- validateSnake canvas timer snake
         t' <- liftIO $ readIORef t
+        score' <- liftIO $ readIORef score
         element curtime # set text (show t')
+        element curscore # set text (show score')
+
+feedSnake :: IORef Snake -> IORef [Food] -> IORef Int -> UI ()
+feedSnake snake food score = liftIO $ do
+    f <- readIORef food
+    s <- readIORef snake
+    let h = head $ trunk s
+        f' = filter (\(Food x _ _) -> x == h) f
+        f'' = filter (\(Food x _ _) -> x /= h) f
+        amount = sum $ map portionSize f'
+    unless (null f') $ do
+        writeIORef snake $ s { stomach =
+            stomach s + amount  }
+        writeIORef food f''
+        modifyIORef score (+ amount)
+
 
 updateSnake :: Element -> IORef Int -> IORef Snake -> UI ()
 updateSnake canvas time snake = do
-        liftIO $ modifyIORef time (+1)
-        t <- liftIO $ readIORef time
-        moveSnake canvas snake
+    liftIO $ modifyIORef time (+1)
+    moveSnake canvas snake
+    liftIO $ modifyIORef snake digestFood
+    where
+        digestFood x =  if stomach x > 0
+            then x { stomach = pred $ stomach x}
+            else x
 
 updateFood :: Element -> IORef [Food] -> UI ()
 updateFood canvas food = liftIO $ do
@@ -103,7 +126,7 @@ updateFood canvas food = liftIO $ do
     where
         newFood = do
             psize <- randomRIO (1,5)
-            slife <- randomRIO (10,50)
+            slife <- randomRIO (50,150)
             x <- randomRIO (0, 50) :: IO Int
             y <- randomRIO (0, 40) :: IO Int
             let x' = fromIntegral x * 10.0
@@ -112,7 +135,7 @@ updateFood canvas food = liftIO $ do
         cropFood f =
                 filter (\x -> shelfLife x >= 0) $ decLife f
             where
-                decLife = map (\x -> x { shelfLife = shelfLife x - 1})
+                decLife = map (\x -> x { shelfLife = pred $ shelfLife x })
 
 validateSnake :: Element -> UI.Timer -> IORef Snake -> UI ()
 validateSnake canvas timer snake = do
