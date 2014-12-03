@@ -50,11 +50,11 @@ setup window = void $ do
     curtime <- string "0"
     timeLabel <- string "t = "
     curscore <- string "0"
-    scoreLabel <- string "SCORE: "
+    scoreLabel <- UI.pre # set text "  SCORE: "
     getBody window #+ [column [
           element canvas
-        , row [element start, element stop]
-        , row [element scoreLabel, element curscore]
+        , row [element start, element stop
+            , element scoreLabel, element curscore]
         , row [element timeLabel, element curtime]
         ]]
 
