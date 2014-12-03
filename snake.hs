@@ -2,16 +2,26 @@ import Data.Maybe
 import Control.Monad
 import Data.IORef
 import System.Exit
+import System.Random (randomRIO)
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
 import Reactive.Threepenny
+
+import Debug.Trace
 
 data Move = U | D | L | R
 
 data Snake = Snake {
       trunk :: [(Double, Double)]
     , heading :: Move
+    , stomach :: Int
     }
+
+data Food = Food {
+      aisle :: (Double, Double)
+    , portionSize :: Int
+    , shelfLife :: Int
+    } deriving (Show)
 
 main :: IO ()
 main = startGUI defaultConfig setup
@@ -21,12 +31,14 @@ width = 500
 height = 400
 
 newSnake :: Snake
-newSnake = Snake [(10.0 * x, 100.0) | x <- [9,8..1]] R
+newSnake = Snake [(10.0 * x, 100.0) | x <- [9,8..1]] R 0
+
+noFood :: [Food]
+noFood = []
 
 setup :: Window -> UI ()
 setup window = void $ do
     return window # set title "Snakeu"
-    timer <- UI.timer # set UI.interval 100
     canvas <- UI.canvas
         # set UI.height height
         # set UI.width width
@@ -34,35 +46,41 @@ setup window = void $ do
         # set UI.textFont "24px sans-serif"
     start <- UI.button # set text "Start"
     stop <- UI.button # set text "Stop"
-    t <- liftIO $ newIORef (0::Int)
-    snake <- liftIO $ newIORef newSnake
     curtime <- string "0"
-    keycode <- string "n/a"
-    bdy <- getBody window
+    timeLabel <- string "t = "
+    score <- string "0"
+    scoreLabel <- string "SCORE: "
     getBody window #+ [column [
           element canvas
         , row [element start, element stop]
-        , row [element curtime]
+        , row [element scoreLabel, element score]
+        , row [element timeLabel, element curtime]
         ]]
 
+    t <- liftIO $ newIORef (0::Int)
+    snake <- liftIO $ newIORef newSnake
+    food <- liftIO $ newIORef noFood
+
+    timer <- UI.timer # set UI.interval 100
     on UI.click start   . const $ do
         UI.clearCanvas canvas
         liftIO $ writeIORef t 0
         liftIO $ writeIORef snake newSnake
         drawSnake "green" canvas snake
         UI.start timer
-    on UI.click stop    . const $ UI.stop timer
+    on UI.click stop . const $ UI.stop timer
 
+    bdy <- getBody window
     on UI.keydown bdy $ \k -> do
         running <- get UI.running timer
-        if running && isMove k
-        then do
+        when (running && isMove k) $ do
             liftIO $ setHeading snake k
             updateSnake canvas t snake
             validateSnake canvas timer snake
-        else return ()
 
     on UI.tick timer $ const $ do
+        updateFood canvas food
+        drawFood canvas food
         updateSnake canvas t snake
         s <- validateSnake canvas timer snake
         t' <- liftIO $ readIORef t
@@ -74,19 +92,39 @@ updateSnake canvas time snake = do
         t <- liftIO $ readIORef time
         moveSnake canvas snake
 
+updateFood :: Element -> IORef [Food] -> UI ()
+updateFood canvas food = liftIO $ do
+    modifyIORef food cropFood
+    dice <- randomRIO (1,10) :: IO Int
+    f <- readIORef food
+    when (dice == 1 && length f < 5) $ do
+        f' <- newFood
+        modifyIORef food (f':)
+    where
+        newFood = do
+            psize <- randomRIO (1,5)
+            slife <- randomRIO (10,50)
+            x <- randomRIO (0, 50) :: IO Int
+            y <- randomRIO (0, 40) :: IO Int
+            let x' = fromIntegral x * 10.0
+                y' = fromIntegral y * 10.0
+            return $ Food (x', y') psize slife
+        cropFood f =
+                filter (\x -> shelfLife x >= 0) $ decLife f
+            where
+                decLife = map (\x -> x { shelfLife = shelfLife x - 1})
+
 validateSnake :: Element -> UI.Timer -> IORef Snake -> UI ()
 validateSnake canvas timer snake = do
     s <- liftIO $ readIORef snake
-    if isInside s
-        then return ()
-        else gameOver canvas timer
+    when (offside s) $ gameOver canvas timer
     where
-        isInside :: Snake -> Bool
-        isInside s'
-            | x <= 0.0 || x >= fromIntegral width = False
-            | y <= 0.0 || y >= fromIntegral height = False
-            | any (\a' -> a' == a) b = False
-            | otherwise = True
+        offside :: Snake -> Bool
+        offside s'
+            | x <= 0.0 || x >= fromIntegral width = True
+            | y <= 0.0 || y >= fromIntegral height = True
+            | a `elem` b = True
+            | otherwise = False
             where
                 a@(x, y) = head $ trunk s'
                 b = tail $ trunk s'
@@ -99,13 +137,15 @@ gameOver canvas timer = do
 
 moveSnake :: Element -> IORef Snake -> UI ()
 moveSnake canvas snake = do
-    delTail snake canvas
-    chSnake
+    incSnake
+    s <- liftIO $ readIORef snake
+    when (stomach s < 1) $
+        delTail snake canvas
     drawSnake "green" canvas snake
     where
-        chSnake = liftIO $ do
+        incSnake = liftIO $ do
             s' <- readIORef snake
-            let s@(Snake b d) = s'
+            let s@(Snake b d _) = s'
                 (x, y) = head b
             writeIORef snake $
                 case d of
@@ -130,6 +170,25 @@ drawSnake color canvas snake = do
     s <- liftIO $ readIORef snake
     element canvas # set UI.fillStyle (UI.htmlColor color)
     mapM_ (\h -> UI.fillRect h 10 10 canvas) (trunk s)
+
+drawFood :: Element -> IORef [Food] -> UI ()
+drawFood canvas food = do
+    f <- liftIO $ readIORef food
+    mapM_ draw f
+    mapM_ clearFood f
+    where
+        draw x = do
+            let c = case portionSize x of
+                    1 -> "yellow"
+                    2 -> "red"
+                    3 -> "green"
+                    _ -> "white"
+            element canvas # set UI.fillStyle (UI.htmlColor c)
+            UI.fillRect (aisle x) 10 10 canvas
+        clearFood x = when (shelfLife x < 1) $ do
+                element canvas # set UI.fillStyle (UI.htmlColor "white")
+                UI.fillRect (aisle x) 10 10 canvas
+
 
 isMove :: Int -> Bool
 isMove k = case k of
