@@ -7,7 +7,20 @@ import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
 import Reactive.Threepenny
 
-import Debug.Trace
+data Game = Game {
+      canvas   :: Element
+    , startBtn :: Element
+    , stopBtn  :: Element
+    , timer    :: UI.Timer
+    , state    :: IORef GameState
+    }
+
+data GameState = GameState {
+      snake    :: Snake
+    , food     :: Food
+    , time     :: Int
+    , score    :: Int
+    }
 
 data Move = U | D | L | R
 
@@ -42,12 +55,12 @@ noFood :: [Food]
 noFood = []
 
 greet :: UI Element
-greet = UI.h1  #+ [string "Hello, Seaky Snake!"]
+greet = UI.h1  #+ [string "Hello, seaky snake!"]
 
 setup :: Window -> UI ()
 setup window = void $ do
     UI.addStyleSheet window "sneakysnake.css"
-    return window # set title "Snakeu"
+    return window # set title "Sneaky snake"
     canvas <- UI.canvas
         # set UI.height height
         # set UI.width width
@@ -74,7 +87,7 @@ setup window = void $ do
     food <- liftIO $ newIORef noFood
 
     timer <- UI.timer # set UI.interval 100
-    on UI.click start   . const $ do
+    on UI.click start . const $ do
         UI.clearCanvas canvas
         wipeCanvas canvas
         liftIO $ do
@@ -180,7 +193,7 @@ gameOver canvas timer = do
     wipeCanvas canvas
     UI.stop timer
     element canvas # set UI.fillStyle (UI.htmlColor "red")
-    UI.fillText "GAME OVER" (175.0, 200.0) canvas
+    UI.fillText "GAME OVER" (165.0, 200.0) canvas
 
 moveSnake :: Element -> IORef Snake -> UI ()
 moveSnake canvas snake = do
@@ -240,7 +253,6 @@ drawFood canvas food = do
                 element canvas # set UI.fillStyle (UI.htmlColor "white")
                 UI.fillRect (aisle x) m m canvas
         m = fromIntegral marker
-
 
 isMove :: Int -> Bool
 isMove k = case k of
