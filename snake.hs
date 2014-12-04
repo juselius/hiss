@@ -79,7 +79,7 @@ setupKeyActions w g = do
         snake' <- getCurrentSnake g
         when (running && isMove k) $ do
             st <- liftIO . readIORef $ state g
-            liftIO $ writeIORef (state g) (st { snake = setHeading snake' k })
+            liftIO $ writeIORef (state g) (st { snake = setHeading k snake' })
             updateSnake g
             st' <- liftIO . readIORef $ state g
             when (offside (snake st')) $ gameOver g

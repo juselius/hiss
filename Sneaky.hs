@@ -52,8 +52,8 @@ isMove k = case k of
         40 -> True
         _ -> False
 
-setHeading :: Snake -> Int -> Snake
-setHeading s k = s {
+setHeading :: Int -> Snake -> Snake
+setHeading k s = s {
     heading = case k of
         37 -> L
         38 -> U
