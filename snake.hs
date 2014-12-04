@@ -61,7 +61,6 @@ setupTimerActions :: Game -> UI ()
 setupTimerActions g = on UI.tick timer' $ const $ do
         updateSnake g
         updateFood g
-        drawFood g
         st <- liftIO $ readIORef $ state g
         let st' = feedSnake st
             snake' = snake st'
@@ -75,6 +74,7 @@ setupTimerActions g = on UI.tick timer' $ const $ do
         _ <- element (curTime g)  # set text (show t)
         _ <- element (curScore g) # set text (show score')
         liftIO . writeIORef (state g) $ st'
+        drawFood g
     where
         timer' = timer g
 
@@ -177,29 +177,32 @@ updateSnake g = do
         c = canvas g
 
 updateFood :: Game -> UI ()
-updateFood game = liftIO $ do
-    st <- liftIO . readIORef $ state game
-    let food' = cropFood (food st)
-    dice <- randomRIO (1,10) :: IO Int
-    if (dice == 1 && length food' < 5)
-    then do
-        f <- newFood
-        writeIORef (state game) $ st { food = f:food' }
-    else
-        writeIORef (state game) $ st { food = food' }
-    where
-        newFood = do
-            psize <- randomRIO (1,5)
-            slife <- randomRIO (50,150)
-            x <- randomRIO (0, 25) :: IO Int
-            y <- randomRIO (0, 20) :: IO Int
-            let x' = fromIntegral $ x * marker
-                y' = fromIntegral $ y * marker
-            return $ Food (x', y') psize slife
-        cropFood f =
-                filter (\x -> shelfLife x >= 0) $ decLife f
-            where
-                decLife = map (\x -> x { shelfLife = pred $ shelfLife x })
+updateFood game = do
+    s <- getCurrentSnake game
+    liftIO $ do
+        st <- readIORef $ state game
+        let food' = cropFood (food st)
+        dice <- randomRIO (1,10) :: IO Int
+        if (dice == 1 && length food' < 5)
+        then do
+            f <- newFood
+            unless (aisle f `elem` trunk s) $
+                writeIORef (state game) $ st { food = f:food' }
+        else
+            writeIORef (state game) $ st { food = food' }
+        where
+            newFood = do
+                psize <- randomRIO (1,5)
+                slife <- randomRIO (50,150)
+                x <- randomRIO (0, 25) :: IO Int
+                y <- randomRIO (0, 20) :: IO Int
+                let x' = fromIntegral $ x * marker
+                    y' = fromIntegral $ y * marker
+                return $ Food (x', y') psize slife
+            cropFood f =
+                    filter (\x -> shelfLife x >= 0) $ decLife f
+                where
+                    decLife = map (\x -> x { shelfLife = pred $ shelfLife x })
 
 offside :: Snake -> Bool
 offside s
