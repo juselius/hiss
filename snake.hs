@@ -164,12 +164,12 @@ updateSnake g = do
     let t = time st
         s = snake st
         s' = digestFood $ moveSnake s
-    when (stomach s' < 1) $
-        wipeTail c s    -- note: the original snake
     liftIO $ writeIORef (state g) st {
           time = t + 1
         , snake = s'}
     drawSnake "brown" g
+    when (stomach s' < 1) $
+        wipeTail c s    -- note: the original snake
     where
         digestFood x =  if stomach x > 0
             then x { stomach = pred $ stomach x}
@@ -216,8 +216,8 @@ offside s
 
 gameOver :: Game -> UI ()
 gameOver g = do
-    wipeCanvas c
     UI.stop t
+    wipeCanvas c
     _ <- element c # set UI.fillStyle (UI.htmlColor "red")
     UI.fillText "GAME OVER" (165.0, 200.0) c
     where
