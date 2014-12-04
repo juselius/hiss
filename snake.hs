@@ -4,46 +4,7 @@ import System.Random (randomRIO)
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
 --import Reactive.Threepenny
-
-data Game = Game {
-      canvas    :: Element
-    , startBtn  :: Element
-    , stopBtn   :: Element
-    , curTime   :: Element
-    , curScore  :: Element
-    , timer     :: UI.Timer
-    , state     :: IORef GameState
-    }
-
-data GameState = GameState {
-      snake    :: Snake
-    , food     :: [Food]
-    , time     :: Int
-    , score    :: Int
-    }
-
-data Snake = Snake {
-      trunk :: [(Double, Double)]
-    , heading :: Move
-    , stomach :: Int
-    }
-
-data Food = Food {
-      aisle :: (Double, Double)
-    , portionSize :: Int
-    , shelfLife :: Int
-    } deriving (Show)
-
-data Move = U | D | L | R
-
-width, height, marker :: Int
-width = 500
-height = 400
-marker = 20
-
-width', height' :: Double
-width' = fromIntegral width
-height' = fromIntegral height
+import Sneaky
 
 main :: IO ()
 main = startGUI defaultConfig { tpStatic = Just "static" } setup
@@ -57,6 +18,31 @@ setup window = void $ do
     setupKeyActions w game
     setupTimerActions game
 
+createLayout :: Window -> UI Game
+createLayout window = do
+    canvas' <- UI.canvas
+        # set UI.height height
+        # set UI.width width
+        # set style [("border", "solid black 5px")]
+        # set UI.textFont "24px sans-serif"
+    start <- UI.button #. "button" # set text "Start"
+    stop <- UI.button #. "button" # set text "Stop"
+    curtime <- string "0"
+    timeLabel <- string "t = "
+    curscore <- string "0"
+    scoreLabel <- UI.pre # set text "  SCORE: "
+    _ <- getBody window #. "wrap" #+ [column [
+          greet
+        , element canvas'
+        , row [element start, element stop
+            , element scoreLabel, element curscore]
+        , row [element timeLabel, element curtime]
+        ]]
+    wipeCanvas canvas'
+    timer' <- UI.timer # set UI.interval 100
+    st <- liftIO $ newIORef newGameState
+    return $ Game canvas' start stop curtime curscore timer' st
+
 setupTimerActions :: Game -> UI ()
 setupTimerActions g = on UI.tick timer' $ const $ do
         updateSnake g
@@ -66,7 +52,7 @@ setupTimerActions g = on UI.tick timer' $ const $ do
             snake' = snake st'
             score' = score st'
             t = time st'
-            newint = truncate $
+            newint = truncate
                 (100.0 - (5.0 * fromIntegral score' / 10.0) :: Double)
         when (offside snake') $ gameOver g
         when (mod score' 10 == 0) . void $
@@ -112,51 +98,11 @@ setupButtonActions g = do
     where
         canvas' = canvas g
 
-createLayout :: Window -> UI Game
-createLayout window = do
-    canvas' <- UI.canvas
-        # set UI.height height
-        # set UI.width width
-        # set style [("border", "solid black 5px")]
-        # set UI.textFont "24px sans-serif"
-    start <- UI.button #. "button" # set text "Start"
-    stop <- UI.button #. "button" # set text "Stop"
-    curtime <- string "0"
-    timeLabel <- string "t = "
-    curscore <- string "0"
-    scoreLabel <- UI.pre # set text "  SCORE: "
-    _ <- getBody window #. "wrap" #+ [column [
-          greet
-        , element canvas'
-        , row [element start, element stop
-            , element scoreLabel, element curscore]
-        , row [element timeLabel, element curtime]
-        ]]
-    wipeCanvas canvas'
-    timer' <- UI.timer # set UI.interval 100
-    st <- liftIO $ newIORef newGameState
-    return $ Game canvas' start stop curtime curscore timer' st
-
 wipeCanvas :: Element -> UI ()
 wipeCanvas c = do
     _ <- element c # set UI.fillStyle (UI.htmlColor "white")
     UI.fillRect (0.0, 0.0) width' height' c
 
-feedSnake :: GameState -> GameState
-feedSnake st = if null f'
-    then st
-    else st {
-          snake = s { stomach = stomach s + amount  }
-        , food = f''
-        , score = score st + amount
-        }
-    where
-        f = food st
-        s = snake st
-        h = head $ trunk s
-        f' = filter (\(Food x _ _) -> x == h) f
-        f'' = filter (\(Food x _ _) -> x /= h) f
-        amount = sum $ map portionSize f'
 
 updateSnake :: Game -> UI ()
 updateSnake g = do
@@ -183,7 +129,7 @@ updateFood game = do
         st <- readIORef $ state game
         let food' = cropFood (food st)
         dice <- randomRIO (1,10) :: IO Int
-        if (dice == 1 && length food' < 5)
+        if dice == 1 && length food' < 5
         then do
             f <- newFood
             unless (aisle f `elem` trunk s) $
@@ -204,16 +150,6 @@ updateFood game = do
                 where
                     decLife = map (\x -> x { shelfLife = pred $ shelfLife x })
 
-offside :: Snake -> Bool
-offside s
-    | x < 0.0 || x >= fromIntegral width = True
-    | y < 0.0 || y >= fromIntegral height = True
-    | a `elem` b = True
-    | otherwise = False
-    where
-        a@(x, y) = head $ trunk s
-        b = tail $ trunk s
-
 gameOver :: Game -> UI ()
 gameOver g = do
     UI.stop t
@@ -223,23 +159,6 @@ gameOver g = do
     where
         c = canvas g
         t = timer g
-
-moveSnake ::  Snake -> Snake
-moveSnake s@(Snake b d _) =
-    s { trunk = newHead:newTail  }
-    where
-        newTail = if stomach s < 1
-            then init $ trunk s
-            else trunk s
-        newHead =
-            case d of
-                U -> (x, y - tt)
-                D -> (x, y + tt)
-                R -> (x + tt, y)
-                L -> (x - tt, y)
-                where
-                    (x, y) = head b
-                    tt = fromIntegral marker
 
 wipeTail :: Element -> Snake -> UI ()
 wipeTail c s = do
@@ -279,34 +198,4 @@ drawFood g = do
                 _ <- element c # set UI.fillStyle (UI.htmlColor "white")
                 UI.fillRect (aisle x) m m c
         m = fromIntegral marker
-
-isMove :: Int -> Bool
-isMove k = case k of
-        37 -> True
-        38 -> True
-        39 -> True
-        40 -> True
-        _ -> False
-
-setHeading :: Snake -> Int -> Snake
-setHeading s k = s {
-    heading = case k of
-        37 -> L
-        38 -> U
-        39 -> R
-        40 -> D
-        _ -> heading s
-        }
-
-greet :: UI Element
-greet = UI.h1  #+ [string "Haskell Interactive Strangler Snake Simulator"]
-
-newSnake :: Snake
-newSnake = Snake [(fromIntegral $ marker * x, 100.0) | x <- [5,4..1]] R 0
-
-newGameState :: GameState
-newGameState = GameState newSnake noFood 0 0
-
-noFood :: [Food]
-noFood = []
 
