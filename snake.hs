@@ -1,28 +1,26 @@
-import Data.Maybe
 import Control.Monad
 import Data.IORef
-import System.Exit
 import System.Random (randomRIO)
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
-import Reactive.Threepenny
+--import Reactive.Threepenny
 
 data Game = Game {
-      canvas   :: Element
-    , startBtn :: Element
-    , stopBtn  :: Element
-    , timer    :: UI.Timer
-    , state    :: IORef GameState
+      canvas    :: Element
+    , startBtn  :: Element
+    , stopBtn   :: Element
+    , curTime   :: Element
+    , curScore  :: Element
+    , timer     :: UI.Timer
+    , state     :: IORef GameState
     }
 
 data GameState = GameState {
       snake    :: Snake
-    , food     :: Food
+    , food     :: [Food]
     , time     :: Int
     , score    :: Int
     }
-
-data Move = U | D | L | R
 
 data Snake = Snake {
       trunk :: [(Double, Double)]
@@ -36,8 +34,7 @@ data Food = Food {
     , shelfLife :: Int
     } deriving (Show)
 
-main :: IO ()
-main = startGUI defaultConfig { tpStatic = Just "static" } setup
+data Move = U | D | L | R
 
 width, height, marker :: Int
 width = 500
@@ -45,23 +42,71 @@ height = 400
 marker = 20
 
 width', height' :: Double
-width' = 500.0
-height' = 400.0
+width' = fromIntegral width
+height' = fromIntegral height
 
-newSnake :: Snake
-newSnake = Snake [(fromIntegral $ marker * x, 100.0) | x <- [5,4..1]] R 0
-
-noFood :: [Food]
-noFood = []
-
-greet :: UI Element
-greet = UI.h1  #+ [string "Hello, seaky snake!"]
+main :: IO ()
+main = startGUI defaultConfig { tpStatic = Just "static" } setup
 
 setup :: Window -> UI ()
 setup window = void $ do
     UI.addStyleSheet window "sneakysnake.css"
-    return window # set title "Sneaky snake"
-    canvas <- UI.canvas
+    _ <- return window # set title "Sneaky snake"
+    game <- createLayout window
+    setupButtonActions game
+    setupKeyActions window game
+    setupTimerActions game
+
+setupTimerActions :: Game -> UI ()
+setupTimerActions g = on UI.tick timer' $ const $ do
+        updateFood g
+        st <- liftIO $ readIORef $ state g
+        let st' = feedSnake st
+            snake' = snake st'
+            score' = score st'
+            t = time st'
+            newint = truncate $
+                (100.0 - (5.0 * fromIntegral score' / 10.0) :: Double)
+        drawFood g
+        updateSnake g
+        when (offside snake') $ gameOver g
+        when (mod score' 10 == 0) . void $
+            return timer' # set UI.interval newint
+        _ <- element (curTime g)  # set text (show t)
+        element (curScore g) # set text (show score')
+    where
+        timer' = timer g
+
+setupKeyActions :: Window -> Game -> UI ()
+setupKeyActions w g = do
+    bdy <- getBody w
+    st <- liftIO . readIORef $ state g
+    let snake' = snake st
+    on UI.keydown bdy $ \k -> do
+        running <- get UI.running timer'
+        when (running && isMove k) $ do
+            liftIO $ writeIORef (state g) (st { snake = setHeading snake' k })
+            updateSnake g
+            when (offside snake') $ gameOver g
+    where
+        timer' = timer g
+
+setupButtonActions :: Game -> UI ()
+setupButtonActions g = do
+    on UI.click (startBtn g) . const $ do
+        _ <- return (timer g) # set UI.interval 100
+        UI.clearCanvas canvas'
+        wipeCanvas canvas'
+        liftIO $ writeIORef (state g) newGameState
+        drawSnake "brown" g
+        UI.start (timer g)
+    on UI.click (stopBtn g). const $ UI.stop (timer g)
+    where
+        canvas' = canvas g
+
+createLayout :: Window -> UI Game
+createLayout window = do
+    canvas' <- UI.canvas
         # set UI.height height
         # set UI.width width
         # set style [("border", "solid black 5px")]
@@ -72,94 +117,68 @@ setup window = void $ do
     timeLabel <- string "t = "
     curscore <- string "0"
     scoreLabel <- UI.pre # set text "  SCORE: "
-    getBody window #. "wrap" #+ [column [
+    _ <- getBody window #. "wrap" #+ [column [
           greet
-        , element canvas
+        , element canvas'
         , row [element start, element stop
             , element scoreLabel, element curscore]
         , row [element timeLabel, element curtime]
         ]]
-    wipeCanvas canvas
-
-    score <- liftIO $ newIORef (0::Int)
-    t <- liftIO $ newIORef (0::Int)
-    snake <- liftIO $ newIORef newSnake
-    food <- liftIO $ newIORef noFood
-    timer <- UI.timer # set UI.interval 100
-
-    on UI.click start . const $ do
-        return timer # set UI.interval 100
-        UI.clearCanvas canvas
-        wipeCanvas canvas
-        liftIO $ do
-            writeIORef t 0
-            writeIORef score 0
-            writeIORef food []
-            writeIORef snake newSnake
-        drawSnake "brown" canvas snake
-        UI.start timer
-    on UI.click stop . const $ UI.stop timer
-
-    bdy <- getBody window
-    on UI.keydown bdy $ \k -> do
-        running <- get UI.running timer
-        when (running && isMove k) $ do
-            liftIO $ setHeading snake k
-            updateSnake canvas t snake
-            validateSnake canvas timer snake
-
-    on UI.tick timer $ const $ do
-        updateFood canvas food
-        feedSnake snake food score
-        drawFood canvas food
-        updateSnake canvas t snake
-        s <- validateSnake canvas timer snake
-        t' <- liftIO $ readIORef t
-        score' <- liftIO $ readIORef score
-        when (mod score' 10 == 0) . void $
-            return timer # set UI.interval
-                (truncate $ 100 - (5 * fromIntegral score' / 10))
-        element curtime # set text (show t')
-        element curscore # set text (show score')
+    wipeCanvas canvas'
+    timer' <- UI.timer # set UI.interval 100
+    st <- liftIO $ newIORef newGameState
+    return $ Game canvas' start stop curtime curscore timer' st
 
 wipeCanvas :: Element -> UI ()
-wipeCanvas canvas = do
-    element canvas # set UI.fillStyle (UI.htmlColor "white")
-    UI.fillRect (0.0, 0.0) width' height' canvas
+wipeCanvas c = do
+    _ <- element c # set UI.fillStyle (UI.htmlColor "white")
+    UI.fillRect (0.0, 0.0) width' height' c
 
-feedSnake :: IORef Snake -> IORef [Food] -> IORef Int -> UI ()
-feedSnake snake food score = liftIO $ do
-    f <- readIORef food
-    s <- readIORef snake
-    let h = head $ trunk s
+feedSnake :: GameState -> GameState
+feedSnake st = if null f'
+    then st
+    else st {
+          snake = s { stomach = stomach s + amount  }
+        , food = f'
+        , score = score st + 1
+        }
+    where
+        f = food st
+        s = snake st
+        h = head $ trunk s
         f' = filter (\(Food x _ _) -> x == h) f
-        f'' = filter (\(Food x _ _) -> x /= h) f
+        --f'' = filter (\(Food x _ _) -> x /= h) f
         amount = sum $ map portionSize f'
-    unless (null f') $ do
-        writeIORef snake $ s { stomach =
-            stomach s + amount  }
-        writeIORef food f''
-        modifyIORef score (+ amount)
 
-
-updateSnake :: Element -> IORef Int -> IORef Snake -> UI ()
-updateSnake canvas time snake = do
-    liftIO $ modifyIORef time (+1)
-    moveSnake canvas snake
-    liftIO $ modifyIORef snake digestFood
+updateSnake :: Game -> UI ()
+updateSnake g = do
+    st <- liftIO . readIORef $ state g
+    let t = time st
+        s = snake st
+        s' = digestFood $ moveSnake s
+    when (stomach s' < 1) $
+        wipeTail c s    -- note: the original snake
+    liftIO $ writeIORef (state g) st {
+          time = t + 1
+        , snake = s'}
+    drawSnake "brown" g
     where
         digestFood x =  if stomach x > 0
             then x { stomach = pred $ stomach x}
             else x
+        c = canvas g
 
-updateFood :: Element -> IORef [Food] -> UI ()
-updateFood canvas food = liftIO $ do
-    modifyIORef food cropFood
+updateFood :: Game -> UI ()
+updateFood game = liftIO $ do
+    st <- liftIO . readIORef $ state game
+    let food' = cropFood (food st)
     dice <- randomRIO (1,10) :: IO Int
-    f <- readIORef food
-    when (dice == 1 && length f < 5) $ do
-        f' <- newFood
-        modifyIORef food (f':)
+    if (dice == 1 && length food' < 5)
+    then do
+        f <- newFood
+        writeIORef (state game) $ st { food = f:food' }
+    else
+        writeIORef (state game) $ st { food = food' }
     where
         newFood = do
             psize <- randomRIO (1,5)
@@ -174,85 +193,80 @@ updateFood canvas food = liftIO $ do
             where
                 decLife = map (\x -> x { shelfLife = pred $ shelfLife x })
 
-validateSnake :: Element -> UI.Timer -> IORef Snake -> UI ()
-validateSnake canvas timer snake = do
-    s <- liftIO $ readIORef snake
-    when (offside s) $ gameOver canvas timer
+offside :: Snake -> Bool
+offside s
+    | x < 0.0 || x >= fromIntegral width = True
+    | y < 0.0 || y >= fromIntegral height = True
+    | a `elem` b = True
+    | otherwise = False
     where
-        offside :: Snake -> Bool
-        offside s'
-            | x < 0.0 || x >= fromIntegral width = True
-            | y < 0.0 || y >= fromIntegral height = True
-            | a `elem` b = True
-            | otherwise = False
-            where
-                a@(x, y) = head $ trunk s'
-                b = tail $ trunk s'
+        a@(x, y) = head $ trunk s
+        b = tail $ trunk s
 
-gameOver :: Element -> UI.Timer -> UI ()
-gameOver canvas timer = do
-    wipeCanvas canvas
-    UI.stop timer
-    element canvas # set UI.fillStyle (UI.htmlColor "red")
-    UI.fillText "GAME OVER" (165.0, 200.0) canvas
-
-moveSnake :: Element -> IORef Snake -> UI ()
-moveSnake canvas snake = do
-    incSnake
-    s <- liftIO $ readIORef snake
-    when (stomach s < 1) $
-        delTail snake canvas
-    drawSnake "brown" canvas snake
+gameOver :: Game -> UI ()
+gameOver g = do
+    wipeCanvas c
+    UI.stop t
+    _ <- element c # set UI.fillStyle (UI.htmlColor "red")
+    UI.fillText "GAME OVER" (165.0, 200.0) c
     where
-        incSnake = liftIO $ do
-            s' <- readIORef snake
-            let s@(Snake b d _) = s'
-                (x, y) = head b
-            writeIORef snake $
-                case d of
-                    U -> s { trunk = (x, y - tt) : b }
-                    D -> s { trunk = (x, y + tt) : b }
-                    R -> s { trunk = (x + tt, y) : b }
-                    L -> s { trunk = (x - tt, y) : b }
-                    where
-                        tt = fromIntegral marker
+        c = canvas g
+        t = timer g
 
-delTail :: IORef Snake -> Element -> UI ()
-delTail s canvas = do
-    s' <- liftIO $ readIORef s
-    let h = last $ trunk s'
-        snake = s' { trunk = init (trunk s') }
-    liftIO $ writeIORef s snake
-    element canvas # set UI.fillStyle (UI.htmlColor "white")
-    UI.fillRect h m m canvas
+moveSnake ::  Snake -> Snake
+moveSnake s@(Snake b d _) =
+    s { trunk = newHead:newTail  }
     where
+        newTail = if stomach s < 1
+            then init $ trunk s
+            else trunk s
+        newHead =
+            case d of
+                U -> (x, y - tt)
+                D -> (x, y + tt)
+                R -> (x + tt, y)
+                L -> (x - tt, y)
+                where
+                    (x, y) = head b
+                    tt = fromIntegral marker
+
+wipeTail :: Element -> Snake -> UI ()
+wipeTail c s = do
+    _ <- element c # set UI.fillStyle (UI.htmlColor "white")
+    UI.fillRect h m m c
+    where
+        h = last $ trunk s
         m = fromIntegral marker
 
-drawSnake :: String -> Element -> IORef Snake -> UI ()
-drawSnake color canvas snake = do
-    s <- liftIO $ readIORef snake
-    element canvas # set UI.fillStyle (UI.htmlColor color)
-    mapM_ (\h -> UI.fillRect h m m canvas) (trunk s)
+drawSnake :: String -> Game -> UI ()
+drawSnake color g = do
+    st <- liftIO . readIORef $ state g
+    let s = snake st
+    _ <- element c # set UI.fillStyle (UI.htmlColor color)
+    mapM_ (\h -> UI.fillRect h m m c) (trunk s)
     where
+        c = canvas g
         m = fromIntegral marker
 
-drawFood :: Element -> IORef [Food] -> UI ()
-drawFood canvas food = do
-    f <- liftIO $ readIORef food
+drawFood :: Game -> UI ()
+drawFood g = do
+    fud <- liftIO . readIORef $ state g
+    let f = food fud
     mapM_ draw f
     mapM_ clearFood f
     where
+        c = canvas g
         draw x = do
-            let c = case portionSize x of
+            let sc = case portionSize x of
                     1 -> "blue"
                     2 -> "green"
                     3 -> "red"
                     _ -> "white"
-            element canvas # set UI.fillStyle (UI.htmlColor c)
-            UI.fillRect (aisle x) m m canvas
+            _ <- element c # set UI.fillStyle (UI.htmlColor sc)
+            UI.fillRect (aisle x) m m c
         clearFood x = when (shelfLife x < 1) $ do
-                element canvas # set UI.fillStyle (UI.htmlColor "white")
-                UI.fillRect (aisle x) m m canvas
+                _ <- element c # set UI.fillStyle (UI.htmlColor "white")
+                UI.fillRect (aisle x) m m c
         m = fromIntegral marker
 
 isMove :: Int -> Bool
@@ -263,14 +277,25 @@ isMove k = case k of
         40 -> True
         _ -> False
 
-setHeading :: IORef Snake -> Int -> IO ()
-setHeading snake k = do
-    s <- readIORef snake
-    writeIORef snake $ s { heading = case k of
+setHeading :: Snake -> Int -> Snake
+setHeading s k = s {
+    heading = case k of
         37 -> L
         38 -> U
         39 -> R
         40 -> D
         _ -> heading s
         }
+
+greet :: UI Element
+greet = UI.h1  #+ [string "Hello, sneaky snake!"]
+
+newSnake :: Snake
+newSnake = Snake [(fromIntegral $ marker * x, 100.0) | x <- [5,4..1]] R 0
+
+newGameState :: GameState
+newGameState = GameState newSnake noFood 0 0
+
+noFood :: [Food]
+noFood = []
 
