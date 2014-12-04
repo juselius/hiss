@@ -39,6 +39,8 @@ createLayout window = do
         , row [element timeLabel, element curtime]
         ]]
     wipeCanvas canvas'
+    _ <- element canvas' # set UI.fillStyle (UI.htmlColor "red")
+    UI.fillText "PRESS START TO BEGIN" (100.0, 200.0) canvas'
     timer' <- UI.timer # set UI.interval 100
     st <- liftIO $ newIORef newGameState
     return $ Game canvas' start stop curtime curscore timer' st
@@ -54,13 +56,13 @@ setupTimerActions g = on UI.tick timer' $ const $ do
             t = time st'
             newint = truncate
                 (100.0 - (5.0 * fromIntegral score' / 10.0) :: Double)
-        when (offside snake') $ gameOver g
         when (mod score' 10 == 0) . void $
             return timer' # set UI.interval newint
         _ <- element (curTime g)  # set text (show t)
         _ <- element (curScore g) # set text (show score')
         liftIO . writeIORef (state g) $ st'
         drawFood g
+        when (offside snake') $ gameOver g
     where
         timer' = timer g
 
