@@ -50,16 +50,18 @@ main = startGUI defaultConfig { tpStatic = Just "static" } setup
 
 setup :: Window -> UI ()
 setup window = void $ do
-    UI.addStyleSheet window "sneakysnake.css"
-    _ <- return window # set title "Sneaky snake"
-    game <- createLayout window
+    w <- return window # set title "Sneaky snake"
+    UI.addStyleSheet w "sneakysnake.css"
+    game <- createLayout w
     setupButtonActions game
-    setupKeyActions window game
+    setupKeyActions w game
     setupTimerActions game
 
 setupTimerActions :: Game -> UI ()
 setupTimerActions g = on UI.tick timer' $ const $ do
+        updateSnake g
         updateFood g
+        drawFood g
         st <- liftIO $ readIORef $ state g
         let st' = feedSnake st
             snake' = snake st'
@@ -67,27 +69,33 @@ setupTimerActions g = on UI.tick timer' $ const $ do
             t = time st'
             newint = truncate $
                 (100.0 - (5.0 * fromIntegral score' / 10.0) :: Double)
-        drawFood g
-        updateSnake g
         when (offside snake') $ gameOver g
         when (mod score' 10 == 0) . void $
             return timer' # set UI.interval newint
         _ <- element (curTime g)  # set text (show t)
-        element (curScore g) # set text (show score')
+        _ <- element (curScore g) # set text (show score')
+        liftIO . writeIORef (state g) $ st'
     where
         timer' = timer g
+
+getCurrentSnake :: Game -> UI Snake
+getCurrentSnake g = liftIO $ do
+    s <- readIORef $ state g
+    return $ snake s
 
 setupKeyActions :: Window -> Game -> UI ()
 setupKeyActions w g = do
     bdy <- getBody w
-    st <- liftIO . readIORef $ state g
-    let snake' = snake st
     on UI.keydown bdy $ \k -> do
         running <- get UI.running timer'
+        snake' <- getCurrentSnake g
         when (running && isMove k) $ do
+            st <- liftIO . readIORef $ state g
             liftIO $ writeIORef (state g) (st { snake = setHeading snake' k })
             updateSnake g
-            when (offside snake') $ gameOver g
+            st' <- liftIO . readIORef $ state g
+            when (offside (snake st')) $ gameOver g
+            liftIO . writeIORef (state g) $ feedSnake st'
     where
         timer' = timer g
 
@@ -139,15 +147,15 @@ feedSnake st = if null f'
     then st
     else st {
           snake = s { stomach = stomach s + amount  }
-        , food = f'
-        , score = score st + 1
+        , food = f''
+        , score = score st + amount
         }
     where
         f = food st
         s = snake st
         h = head $ trunk s
         f' = filter (\(Food x _ _) -> x == h) f
-        --f'' = filter (\(Food x _ _) -> x /= h) f
+        f'' = filter (\(Food x _ _) -> x /= h) f
         amount = sum $ map portionSize f'
 
 updateSnake :: Game -> UI ()
@@ -288,7 +296,7 @@ setHeading s k = s {
         }
 
 greet :: UI Element
-greet = UI.h1  #+ [string "Hello, sneaky snake!"]
+greet = UI.h1  #+ [string "Haskell Interactive Strangler Snake Simulator"]
 
 newSnake :: Snake
 newSnake = Snake [(fromIntegral $ marker * x, 100.0) | x <- [5,4..1]] R 0
