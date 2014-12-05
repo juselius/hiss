@@ -16,6 +16,7 @@ module Sneaky (
 
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
+import Data.List
 import Types
 
 width, height, marker :: Int
@@ -71,8 +72,7 @@ feedSnake st = if null f'
         f = food st
         s = snake st
         h = head $ trunk s
-        f' = filter (\(Food x _ _) -> x == h) f
-        f'' = filter (\(Food x _ _) -> x /= h) f
+        (f', f'') = partition (\(Food x _ _) -> x == h) f
         amount = sum $ map portionSize f'
 
 offside :: Snake -> Bool
