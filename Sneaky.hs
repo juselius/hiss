@@ -16,7 +16,6 @@ module Sneaky (
 
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
-import Data.IORef
 import Types
 
 width, height, marker :: Int

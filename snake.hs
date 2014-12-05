@@ -3,7 +3,6 @@ import Data.IORef
 import System.Random (randomRIO)
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
-import Data.IORef
 --import Reactive.Threepenny
 import Sneaky
 
