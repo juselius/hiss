@@ -45,7 +45,7 @@ setHeading k s = s {
         _ -> heading s
         }
     where
-        check x y = if (heading s) == x then x else y
+        check x y = if heading s == x then x else y
 
 greet :: UI Element
 greet = UI.h1  #+ [string "Haskell Interactive Strangler Snake Simulator"]

@@ -14,7 +14,7 @@ License
       free or for profit.
  These rights, on this notice, rely.
 
-(c) Jonas Juselius, 2013.
+(c) Jonas Juselius, 2014.
 
 (*License by Alexander Edward Genaud, 2005*)
 ```

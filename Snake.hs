@@ -30,12 +30,15 @@ createLayout window = do
     curtime <- string "0"
     timeLabel <- string "t = "
     curscore <- string "0"
+    highscore <- string "0" # set UI.id_ "highscore" # set value "0"
     scoreLabel <- UI.pre # set text "  SCORE: "
+    hscoreLabel <- UI.pre # set text "      HIGHSCORE: "
     _ <- getBody window #. "wrap" #+ [column [
           greet
         , element canvas'
         , row [element start, element stop
-            , element scoreLabel, element curscore]
+            , element scoreLabel, element curscore
+            , element hscoreLabel, element highscore]
         , row [element timeLabel, element curtime]
         ]]
     wipeCanvas canvas'
@@ -153,12 +156,24 @@ updateFood game = do
                     decLife = map (\x -> x { shelfLife = pred $ shelfLife x })
 
 gameOver :: Game -> UI ()
-gameOver g = do
+gameOver g = void $ do
     UI.stop t
     wipeCanvas c
     _ <- element c # set UI.fillStyle (UI.htmlColor "red")
     UI.fillText "GAME OVER" (165.0, 200.0) c
+    cscore <- (liftIO . readIORef) (state g) >>= \s -> return $ score s
+    Just hse <- liftIO (getWindow (canvas g)) >>= \w ->
+        getElementById w "highscore"
+    hscore <- get value hse
+    let nh = newHigh cscore hscore
+    _ <- element hse # set text nh
+    element hse # set text nh # set value nh
     where
+        newHigh cs hs = if cs > hs'
+            then show cs
+            else show hs'
+            where
+                hs' = read hs :: Int
         c = canvas g
         t = timer g
 

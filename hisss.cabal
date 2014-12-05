@@ -30,7 +30,7 @@ source-repository head
     location: git@github.com:bakerjonas/hisss.git
 
 executable hisss.bin
-    main-is: snake.hs
+    main-is: Snake.hs
     build-depends:
           base
         , mtl
