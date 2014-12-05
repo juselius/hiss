@@ -1,39 +1,23 @@
-module Sneaky where
+module Sneaky (
+      module Types
+    , moveSnake
+    , marker
+    , width
+    , height
+    , width'
+    , height'
+    , newGameState
+    , feedSnake
+    , offside
+    , setHeading
+    , isMove
+    , greet
+    ) where
 
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
 import Data.IORef
-
-data Game = Game {
-      canvas    :: Element
-    , startBtn  :: Element
-    , stopBtn   :: Element
-    , curTime   :: Element
-    , curScore  :: Element
-    , timer     :: UI.Timer
-    , state     :: IORef GameState
-    }
-
-data GameState = GameState {
-      snake    :: Snake
-    , food     :: [Food]
-    , time     :: Int
-    , score    :: Int
-    }
-
-data Snake = Snake {
-      trunk :: [(Double, Double)]
-    , heading :: Move
-    , stomach :: Int
-    }
-
-data Food = Food {
-      aisle :: (Double, Double)
-    , portionSize :: Int
-    , shelfLife :: Int
-    } deriving (Show)
-
-data Move = U | D | L | R
+import Types
 
 width, height, marker :: Int
 width = 500
@@ -55,12 +39,14 @@ isMove k = case k of
 setHeading :: Int -> Snake -> Snake
 setHeading k s = s {
     heading = case k of
-        37 -> L
-        38 -> U
-        39 -> R
-        40 -> D
+        37 -> check R L
+        38 -> check D U
+        39 -> check L R
+        40 -> check U D
         _ -> heading s
         }
+    where
+        check x y = if (heading s) == x then x else y
 
 greet :: UI Element
 greet = UI.h1  #+ [string "Haskell Interactive Strangler Snake Simulator"]
