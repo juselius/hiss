@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 import Control.Monad
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
@@ -18,8 +19,8 @@ setup _ = void $ do
     where
         action :: UI World -> UI World
         action world = do
-            w <- world
-            let w' = w { intW = succ $ intW w }
+            w@(World {..}) <- world
+            let w' = w { intW = succ intW }
             liftIO $ print w'
             return w'
 

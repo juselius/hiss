@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 import Control.Monad
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
@@ -8,7 +9,7 @@ main :: IO ()
 main = startGUI defaultConfig setup
 
 setup :: Window -> UI ()
-setup _ = void $ do
+setup _ = do
     (e0, fire) <- liftIO  UI.newEvent
     let e0' = action <$ e0
     e <- accumE (World 0 (return ())) e0'
@@ -16,7 +17,7 @@ setup _ = void $ do
     replicateM_ 5 . liftIO $ fire ()
     where
         action :: World -> World
-        action w = w { intW = succ $ intW w
-                     , runW = liftIO . print $ intW w
+        action w@(World {..}) = w { intW = succ intW
+                     , runW = liftIO . print $ intW
                      }
 
