@@ -14,13 +14,13 @@ setup _ = void $ do
 
     let e0' = action <$ e0
     e <- accumE (return (World 0)) e0'
-    onEvent e void
+    onEvent e (liftIO . void)
     replicateM_ 5 . liftIO $ fire ()
     where
-        action :: UI World -> UI World
+        action :: IO World -> IO World
         action world = do
-            w@(World {..}) <- world
-            let w' = w { intW = succ intW }
-            liftIO $ print w'
-            return w'
+            World {..} <- world
+            let w = World (succ intW)
+            print w
+            return w
 

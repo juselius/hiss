@@ -10,9 +10,9 @@ data World = World {
     , wStr :: String
     , wTime :: Int
     , wTimer :: UI.Timer
-    , wUI :: UI Int
-    , wRun :: UI ()
     }
+
+data WorldUI = WorldUI {stateW :: World, runW :: UI ()}
 
 data ActiveElements = AE {
       btn0  :: Element
@@ -37,68 +37,60 @@ setup window = void $ do
     _ <- getBody window #+ [
           row [element btn0', element btn1', element btn2']
         , row [string "stat = ", element infos']
-        , row [
-              string "timex = ", element tStr0'
-            , string "   timer = ", element tStr1'
-            ]
+        , row [string "timer = ", element tStr0']
+        , row [string "ticks = ", element tStr1' ]
         ]
 
     tx <- UI.timer
     let ae = AE btn0' btn1' btn2' infos' tStr0' tStr1'
-        wrl = World 0 " $ " 0 tx (return 0) (return ())
+        wrl = World 0 " $ " 0 tx
     runDemo ae wrl
 
 runDemo :: ActiveElements -> World -> UI ()
 runDemo ae wrl = void $ do
     let eClick0 = clickAction0 ae <$ UI.click (btn0 ae)
-        eClick1 = clickAction1 ae <$ UI.click (btn1 ae)
-        eClick2 = const wrl <$ UI.click (btn2 ae)
-        eTimer = UI.tick (wTimer wrl)
-        eTimex = (\w -> w {
-                wTime = succ (wTime w)
-              , wRun = return ()
-            }) <$ eTimer
+        --eClick1 = clickAction1 ae <$ UI.click (btn1 ae)
+        --eClick2 = const (return wrl) <$ UI.click (btn2 ae)
+        --eTimer = UI.tick (wTimer wrl)
+        --eTimex = (\w -> w >>= \w' ->
+            --return $ w' { wTime = succ (wTime w') }) <$ eTimer
 
-    bTimer <- accumB (0::Int) $ (+1) <$ eTimer
-    element (tStr1 ae) # sink text (show <$> bTimer)
-    eActions <- accumE wrl $ concatenate <$> unions [
-          eClick0
-        , eClick1
-        , eClick2
-        , eTimex
-        ]
+    --bTimer <- accumB (0::Int) $ (+1) <$ eTimer
+    --element (tStr1 ae) # sink text (show <$> bTimer)
+    --eActions <- accumE (WorldUI wrl (return ())) $ concatenate <$> unions [
+          --eClick0
+        --, eClick1
+        --, eClick2
+        --, eTimex
+        --]
+    eActions <- accumE (return wrl) $ eClick0
 
-    onEvent eActions $ \w -> void $ wRun w
+    onEvent eActions $ \w -> void $ liftIO w
 
-clickAction0 :: ActiveElements -> World -> World
-clickAction0 ae w =
-    let i = wInt w
-        ws = wStr w in
-    w {
-      wInt = i + 1
-    , wStr = ws ++ show i ++ ","
-    , wRun = void $ UI.start (wTimer w) >> showState ae w
-    , wUI = wUI w >>= \j -> return (j+1)
-    }
+clickAction0 :: ActiveElements -> IO World -> IO World
+clickAction0 ae w = do
+    w' <- w
+    putStrLn $ wStr w'
+    w
 
-clickAction1 :: ActiveElements -> World -> World
-clickAction1 ae w =
-    let i = wInt w
-        ws = wStr w in
-    w {
-      wInt = i
-    , wStr = ws ++ show i ++ "."
-    , wRun = void $ UI.stop (wTimer w) >> showState ae w
-    , wUI = wUI w >>= \j -> return (j-1)
-    }
+clickAction1 :: ActiveElements -> UI World -> UI World
+clickAction1 ae w = do
+    ws <- wStr <$> w
+    i <- wInt <$> w
+    let brave x = x {
+          wInt = i
+        , wStr = ws ++ show i ++ ";"
+        }
+    w' <- brave <$> w
+    UI.stop (wTimer w')
+    showState ae w'
+    return w'
 
 showState :: ActiveElements -> World -> UI ()
 showState ae w = void $ do
-    j <- wUI w
     liftIO . putStrLn $ "time=" ++ show (wTime w)
     element (infos ae) # set text (
         show (wInt w)
-        ++ " @ " ++ show j
         ++ " : " ++ wStr w
         )
     element (tStr0 ae) # set text (show (wTime w))
