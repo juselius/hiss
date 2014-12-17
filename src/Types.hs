@@ -4,22 +4,22 @@ import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
 import Data.IORef
 
-data Game = Game {
-      canvas    :: Element
-    , startBtn  :: Element
-    , stopBtn   :: Element
-    , curTime   :: Element
-    , curScore  :: Element
-    , timer     :: UI.Timer
-    , state     :: IORef GameState
+data ActiveElements = ActiveElements {
+      canvas  :: Element
+    , playB   :: Element
+    , pauseB  :: Element
+    , scoreF  :: Element
+    , highF   :: Element
+    , timeF   :: Element
+    , timer   :: UI.Timer
     }
 
-data GameState = GameState {
-      snake    :: Snake
-    , food     :: [Food]
-    , time     :: Int
-    , score    :: Int
-    } deriving (Show)
+data Game = Game {
+      snake    :: Behavior Snake
+    , food     :: Behavior [Food]
+    , time     :: Behavior Int
+    , score    :: Behavior Int
+    }
 
 data Snake = Snake {
       trunk :: [(Double, Double)]

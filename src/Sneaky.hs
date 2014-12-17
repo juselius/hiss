@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Sneaky (
       module Types
     , moveSnake
@@ -6,17 +7,22 @@ module Sneaky (
     , height
     , width'
     , height'
+    , bgColor
+    , newSnake
+    , noFood
+    , getCanvas
+    , wipeCanvas
     , newGameState
-    , feedSnake
     , offside
     , setHeading
     , isMove
     , greet
     ) where
 
+import Control.Monad
+import Data.Maybe
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
-import Data.List
 import Types
 
 width, height, marker :: Int
@@ -27,6 +33,9 @@ marker = 20
 width', height' :: Double
 width' = fromIntegral width
 height' = fromIntegral height
+
+bgColor :: String
+bgColor = "whtite"
 
 isMove :: Int -> Bool
 isMove k = case k of
@@ -51,29 +60,31 @@ setHeading k s = s {
 greet :: UI Element
 greet = UI.h1  #+ [string "Haskell Interactive Strangler Snake Simulator"]
 
+getCanvas :: UI Element
+getCanvas = do
+    w <- askWindow
+    fromJust <$> getElementById w "canvas"
+
+wipeCanvas :: UI ()
+wipeCanvas = do
+    c <- getCanvas
+    UI.clearCanvas c
+    void $ element c # set UI.fillStyle (UI.htmlColor bgColor)
+    UI.fillRect (0.0, 0.0) width' height' c
+
 newSnake :: Snake
 newSnake = Snake [(fromIntegral $ marker * x, 100.0) | x <- [5,4..1]] R 0
 
-newGameState :: GameState
-newGameState = GameState newSnake noFood 0 0
+newGameState :: Game
+newGameState = Game {
+      snake = pure newSnake
+    , food  = pure noFood
+    , time  = pure 0
+    , score = pure 0
+    }
 
 noFood :: [Food]
 noFood = []
-
-feedSnake :: GameState -> GameState
-feedSnake st = if null f'
-    then st
-    else st {
-          snake = s { stomach = stomach s + amount  }
-        , food = f''
-        , score = score st + amount
-        }
-    where
-        f = food st
-        s = snake st
-        h = head $ trunk s
-        (f', f'') = partition (\(Food x _ _) -> x == h) f
-        amount = sum $ map portionSize f'
 
 offside :: Snake -> Bool
 offside s
@@ -86,18 +97,18 @@ offside s
         b = tail $ trunk s
 
 moveSnake ::  Snake -> Snake
-moveSnake s@(Snake b d _) =
+moveSnake s@(Snake {..}) =
     s { trunk = newHead:newTail  }
     where
-        newTail = if stomach s < 1
-            then init $ trunk s
-            else trunk s
+        newTail = if stomach  < 1
+            then init $ trunk
+            else trunk
         newHead =
-            case d of
+            case heading of
                 U -> (x, y - tt)
                 D -> (x, y + tt)
                 R -> (x + tt, y)
                 L -> (x - tt, y)
                 where
-                    (x, y) = head b
+                    (x, y) = head trunk
                     tt = fromIntegral marker
