@@ -1,7 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 module Sneaky (
       module Types
-    , moveSnake
     , marker
     , width
     , height
@@ -9,18 +8,22 @@ module Sneaky (
     , height'
     , bgColor
     , newSnake
+    , moveSnake
+    , steerSnake
+    , feedSnake
     , noFood
+    , updateFood
+    , deleteNth
     , getCanvas
     , wipeCanvas
-    , newGameState
     , offside
-    , setHeading
-    , isMove
+    , toMove
     , greet
     ) where
 
 import Control.Monad
 import Data.Maybe
+import Data.List as L
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
 import Types
@@ -37,23 +40,20 @@ height' = fromIntegral height
 bgColor :: String
 bgColor = "whtite"
 
-isMove :: Int -> Bool
-isMove k = case k of
-        37 -> True
-        38 -> True
-        39 -> True
-        40 -> True
-        _ -> False
+toMove :: Int -> Maybe Move
+toMove k = case k of
+        37 -> Just R
+        38 -> Just D
+        39 -> Just L
+        40 -> Just U
+        _ -> Nothing
 
-setHeading :: Int -> Snake -> Snake
-setHeading k s = s {
-    heading = case k of
-        37 -> check R L
-        38 -> check D U
-        39 -> check L R
-        40 -> check U D
-        _ -> heading s
-        }
+validateHeading :: Snake -> Move -> Move
+validateHeading s k = case k of
+        R -> check R L
+        D -> check D U
+        L -> check L R
+        U -> check U D
     where
         check x y = if heading s == x then x else y
 
@@ -72,16 +72,10 @@ wipeCanvas = do
     void $ element c # set UI.fillStyle (UI.htmlColor bgColor)
     UI.fillRect (0.0, 0.0) width' height' c
 
-newSnake :: Snake
-newSnake = Snake [(fromIntegral $ marker * x, 100.0) | x <- [5,4..1]] R 0
-
-newGameState :: Game
-newGameState = Game {
-      snake = pure newSnake
-    , food  = pure noFood
-    , time  = pure 0
-    , score = pure 0
-    }
+newSnake :: Int -> Snake
+newSnake n = Snake [(fromIntegral $ marker * x, 100.0) | x <- body] R 0
+    where
+        body = [n,(n-1)..1]
 
 noFood :: [Food]
 noFood = []
@@ -112,3 +106,20 @@ moveSnake s@(Snake {..}) =
                 where
                     (x, y) = head trunk
                     tt = fromIntegral marker
+
+steerSnake :: Maybe Move -> Snake -> Snake
+steerSnake h s@(Snake {..}) =
+    s { heading = maybe heading (validateHeading s) h }
+
+feedSnake :: [Food] -> Snake -> Snake
+feedSnake f s@(Snake {..}) =
+    s { stomach = stomach + if null f then 0 else portionSize (head f) }
+
+updateFood :: [Food] -> [Food]
+updateFood f = f
+
+deleteNth :: Int -> [a] -> [a]
+deleteNth n f = a ++ tail b
+    where
+        (a, b) = splitAt n f
+

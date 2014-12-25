@@ -4,7 +4,7 @@ import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
 import Data.IORef
 
-data ActiveElements = ActiveElements {
+data Game = Game {
       canvas  :: Element
     , playB   :: Element
     , pauseB  :: Element
@@ -12,13 +12,6 @@ data ActiveElements = ActiveElements {
     , highF   :: Element
     , timeF   :: Element
     , timer   :: UI.Timer
-    }
-
-data Game = Game {
-      snake    :: Behavior Snake
-    , food     :: Behavior [Food]
-    , time     :: Behavior Int
-    , score    :: Behavior Int
     }
 
 data Snake = Snake {
@@ -31,7 +24,7 @@ data Food = Food {
       aisle :: (Double, Double)
     , portionSize :: Int
     , shelfLife :: Int
-    } deriving (Show)
+    } deriving (Show, Eq)
 
 data Move = U | D | L | R deriving(Show, Eq, Ord)
 

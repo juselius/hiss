@@ -18,14 +18,41 @@ setup :: Window -> UI ()
 setup window = void $ do
     w <- return window # set title "Sneaky snake"
     UI.addStyleSheet w "sneakysnake.css"
-    void $ createLayout w
-    let g = newGameState
-    return ()
-    {-setupButtonActions game-}
-    {-setupKeyActions w game-}
-    {-setupTimerActions game-}
+    game@(Game {..}) <- createLayout w
 
-uiElements :: UI ActiveElements
+    bdy <- getBody w
+    (eNewFood, fNewFood) <- liftIO UI.newEvent
+    (eScore, fScore) <- liftIO UI.newEvent
+    let eTick   = (+1) <$ UI.tick timer
+        eReset  = const (0::Int) <$ UI.click playB
+        ePause  = UI.click pauseB
+        eKey    = toMove <$> UI.keydown bdy
+        eTimer  = head <$> unions [eTick, eReset]
+        eSnakeT = head <$> unions [
+              moveSnake <$ eTick
+            , const (newSnake 1) <$ eReset
+            , steerSnake <$> eKey
+            ]
+        eFoodT = head <$> unions [
+              updateFood <$ eTick
+            , const noFood <$ eReset
+            , (:) <$> eNewFood
+            , deleteNth <$> eScore
+            ]
+
+    bTimer <- accumB (0::Int) eTimer
+    bScore <- accumB (0::Int) $ head <$> unions [ (+1) <$ eScore, eReset]
+    bFood <- accumB noFood $ eFoodT
+    let bFeeder = pure feedSnake <*> bFood
+    bSnake <- accumB (newSnake 5) $ (.) <$> bFeeder <@> eSnakeT
+
+    onEvent eReset . const $ UI.start timer
+    onEvent ePause . const $ UI.stop timer
+    onChanges bTimer $ tickActions game bSnake bFood
+    onChanges bSnake $ snakeActions game bFood
+    onChanges bFood  $ foodActions  game bSnake
+
+uiElements :: UI Game
 uiElements =  do
     canvas <- UI.canvas
         # set UI.id_ "canvas"
@@ -38,8 +65,8 @@ uiElements =  do
     scoreF <- string "0"
     highF <- string "0" # set UI.id_ "highscore" # set value "0"
     timeF <- string "0"
-    timer <- UI.timer # set UI.interval 100
-    return ActiveElements {
+    timer <- UI.timer # set UI.interval 1000
+    return Game {
           canvas  = canvas
         , playB   = playB
         , pauseB  = pauseB
@@ -49,9 +76,9 @@ uiElements =  do
         , timer   = timer
        }
 
-createLayout :: Window -> UI ()
+createLayout :: Window -> UI Game
 createLayout window = do
-    ActiveElements {..} <- uiElements
+    elm@(Game {..}) <- uiElements
     void $ getBody window #. "wrap" #+ [column [
           greet
         , element canvas
@@ -63,58 +90,56 @@ createLayout window = do
     wipeCanvas
     void $ element canvas # set UI.fillStyle (UI.htmlColor "red")
     UI.fillText "PRESS PLAY TO BEGIN" (100.0, 200.0) canvas
-    {-st <- liftIO $ newIORef newGameState-}
-    {-return $ Game canvas' start stop curtime curscore timex' st-}
+    return elm
 
-{-setupTimerActions :: Game -> UI ()-}
-{-setupTimerActions g = on UI.tick timer' $ const $ do-}
-        {-updateSnake g-}
-        {-updateFood g-}
-        {-st <- liftIO $ readIORef $ state g-}
-        {-let st' = feedSnake st-}
-            {-snake' = snake st'-}
-            {-score' = score st'-}
-            {-t = time st'-}
-            {-newint = truncate-}
-                {-(100.0 - (5.0 * fromIntegral score' / 10.0) :: Double)-}
-        {-when (mod score' 10 == 0) . void $-}
-            {-return timer' # set UI.interval newint-}
-        {-void $ element (curTime g)  # set text (show t)-}
-        {-void $ element (curScore g) # set text (show score')-}
-        {-liftIO . writeIORef (state g) $ st'-}
-        {-drawFood g-}
-        {-when (offside snake') $ gameOver g-}
-    {-where-}
-        {-timer' = timer g-}
+tickActions :: Game -> Behavior Snake -> Behavior [Food] -> Int -> UI ()
+tickActions g bs bf t = return ()
+    {-updateSnake g-}
+    {-updateFood g-}
+    {-st <- liftIO $ readIORef $ state g-}
+    {-let st' = feedSnake st-}
+        {-snake' = snake st'-}
+        {-score' = score st'-}
+        {-t = time st'-}
+        {-newint = truncate-}
+            {-(100.0 - (5.0 * fromIntegral score' / 10.0) :: Double)-}
+    {-when (mod score' 10 == 0) . void $-}
+        {-return timer' # set UI.interval newint-}
+    {-void $ element (curTime g)  # set text (show t)-}
+    {-void $ element (curScore g) # set text (show score')-}
+    {-liftIO . writeIORef (state g) $ st'-}
+    {-drawFood g-}
+    {-when (offside snake') $ gameOver g-}
+{-where-}
+    {-timer' = timer g-}
 
-{-getCurrentSnake :: Game -> UI Snake-}
-{-getCurrentSnake g = liftIO $ do-}
-    {-s <- readIORef $ state g-}
-    {-return $ snake s-}
+snakeActions :: Game -> Behavior [Food] -> Snake -> UI ()
+snakeActions g bf snake = return ()
+    --bdy <- getBody w
+    --on UI.keydown bdy $ \k -> do
+        --running <- get UI.running timer'
+        --snake' <- getCurrentSnake g
+        --when (running && isMove k) $ do
+            --st <- liftIO . readIORef $ state g
+            --liftIO $ writeIORef (state g) (st { snake = setHeading k snake' })
+            --updateSnake g
+            --st' <- liftIO . readIORef $ state g
+            --when (offside (snake st')) $ gameOver g
+            --liftIO . writeIORef (state g) $ feedSnake st'
+    --where
+        --timer' = timer g
 
-{-setupKeyActions :: Window -> Game -> UI ()-}
-{-setupKeyActions w g = do-}
-    {-bdy <- getBody w-}
-    {-on UI.keydown bdy $ \k -> do-}
-        {-running <- get UI.running timer'-}
-        {-snake' <- getCurrentSnake g-}
-        {-when (running && isMove k) $ do-}
-            {-st <- liftIO . readIORef $ state g-}
-            {-liftIO $ writeIORef (state g) (st { snake = setHeading k snake' })-}
-            {-updateSnake g-}
-            {-st' <- liftIO . readIORef $ state g-}
-            {-when (offside (snake st')) $ gameOver g-}
-            {-liftIO . writeIORef (state g) $ feedSnake st'-}
-    {-where-}
-        {-timer' = timer g-}
+foodActions :: Game -> Behavior Snake -> [Food] -> UI ()
+foodActions g bs food = return ()
 
-{-resetGame :: GameFRP -> UI ()-}
-{-resetGame g = do-}
-    {-canvas' <- getCanvas-}
-    {-void $ return (timex g) # set UI.interval 100-}
-    {-wipeCanvas canvas'-}
-    {-drawSnake "brown" (snake' g)-}
-    {-UI.start (timex g)-}
+resetGame :: Game -> Behavior Snake -> UI ()
+resetGame g s = do
+    let Game {..} = g
+    void $ return timer # set UI.interval 100
+    wipeCanvas
+    snake <- currentValue s
+    drawSnake "brown" snake
+    UI.start timer
 
 {-setupButtonActions :: Game -> UI ()-}
 {-setupButtonActions g = do-}
@@ -140,13 +165,13 @@ createLayout window = do
             {-then x { stomach = pred $ stomach x}-}
             {-else x-}
 
-{-drawSnake :: String -> Snake -> UI ()-}
-{-drawSnake color s = do-}
-    {-c <- getCanvas-}
-    {-void $ element c # set UI.fillStyle (UI.htmlColor color)-}
-    {-mapM_ (\h -> UI.fillRect h m m c) (trunk s)-}
-    {-where-}
-        {-m = fromIntegral marker-}
+drawSnake :: String -> Snake -> UI ()
+drawSnake color s = do
+    c <- getCanvas
+    void $ element c # set UI.fillStyle (UI.htmlColor color)
+    mapM_ (\h -> UI.fillRect h m m c) (trunk s)
+    where
+        m = fromIntegral marker
 
 {-updateFood :: Game -> UI ()-}
 {-updateFood game = do-}
@@ -206,20 +231,20 @@ createLayout window = do
         {-h = last $ trunk s-}
         {-m = fromIntegral marker-}
 
-feedSnake :: Game -> UI Game
-feedSnake g@(Game {..}) = do
-    food' <- UI.currentValue food
-    snake'@(Snake {..}) <- UI.currentValue snake
-    let (f', f'') = partition (\(Food x _ _) -> x == h) food'
-        h = head $ trunk
-        amount = sum $ map portionSize f'
-    if null f'
-    then return g
-    else return g {
-          snake = snake' { stomach = stomach + amount  } <$ snake
-        , food = f'' <$ food
-        , score = (+ amount) <$> score
-        }
+--feedSnake :: Game -> UI Game
+--feedSnake g@(Game {..}) = do
+    --food' <- UI.currentValue food
+    --snake'@(Snake {..}) <- UI.currentValue snake
+    --let (f', f'') = partition (\(Food x _ _) -> x == h) food'
+        --h = head $ trunk
+        --amount = sum $ map portionSize f'
+    --if null f'
+    --then return g
+    --else return g {
+          --snake = snake' { stomach = stomach + amount  } <$ snake
+        --, food = f'' <$ food
+        --, score = (+ amount) <$> score
+        --}
 
 
 {-drawFood :: Game -> UI ()-}
