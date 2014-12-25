@@ -14,11 +14,8 @@ module Sneaky (
     , noFood
     , updateFood
     , deleteNth
-    , getCanvas
-    , wipeCanvas
     , offside
-    , toMove
-    , greet
+    , keycode
     ) where
 
 import Control.Monad
@@ -38,10 +35,10 @@ width' = fromIntegral width
 height' = fromIntegral height
 
 bgColor :: String
-bgColor = "whtite"
+bgColor = "white"
 
-toMove :: Int -> Maybe Move
-toMove k = case k of
+keycode :: Int -> Maybe Move
+keycode k = case k of
         37 -> Just R
         38 -> Just D
         39 -> Just L
@@ -56,21 +53,6 @@ validateHeading s k = case k of
         U -> check U D
     where
         check x y = if heading s == x then x else y
-
-greet :: UI Element
-greet = UI.h1  #+ [string "Haskell Interactive Strangler Snake Simulator"]
-
-getCanvas :: UI Element
-getCanvas = do
-    w <- askWindow
-    fromJust <$> getElementById w "canvas"
-
-wipeCanvas :: UI ()
-wipeCanvas = do
-    c <- getCanvas
-    UI.clearCanvas c
-    void $ element c # set UI.fillStyle (UI.htmlColor bgColor)
-    UI.fillRect (0.0, 0.0) width' height' c
 
 newSnake :: Int -> Snake
 newSnake n = Snake [(fromIntegral $ marker * x, 100.0) | x <- body] R 0

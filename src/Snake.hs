@@ -26,11 +26,11 @@ setup window = void $ do
     let eTick   = (+1) <$ UI.tick timer
         eReset  = const (0::Int) <$ UI.click playB
         ePause  = UI.click pauseB
-        eKey    = toMove <$> UI.keydown bdy
+        eKey    = keycode <$> UI.keydown bdy
         eTimer  = head <$> unions [eTick, eReset]
         eSnakeT = head <$> unions [
               moveSnake <$ eTick
-            , const (newSnake 1) <$ eReset
+            , const (newSnake 5) <$ eReset
             , steerSnake <$> eKey
             ]
         eFoodT = head <$> unions [
@@ -41,12 +41,14 @@ setup window = void $ do
             ]
 
     bTimer <- accumB (0::Int) eTimer
-    bScore <- accumB (0::Int) $ head <$> unions [ (+1) <$ eScore, eReset]
-    bFood <- accumB noFood $ eFoodT
-    let bFeeder = pure feedSnake <*> bFood
-    bSnake <- accumB (newSnake 5) $ (.) <$> bFeeder <@> eSnakeT
+    bScore <- accumB (0::Int) $ head <$> unions [(+1) <$ eScore, eReset]
+    bFood <- accumB noFood eFoodT
+    bSnake <- accumB (newSnake 5) $
+        (.) <$> (pure feedSnake <*> bFood) <@> eSnakeT
 
-    onEvent eReset . const $ UI.start timer
+    onEvent eReset . const $ do
+        wipeCanvas
+        UI.start timer
     onEvent ePause . const $ UI.stop timer
     onChanges bTimer $ tickActions game bSnake bFood
     onChanges bSnake $ snakeActions game bFood
@@ -62,7 +64,7 @@ uiElements =  do
         # set UI.textFont "24px sans-serif"
     playB <- UI.button #. "button" # set text "New game"
     pauseB <- UI.button #. "button" # set text "Pause"
-    scoreF <- string "0"
+    scoreF <- string "0"# set value "0"
     highF <- string "0" # set UI.id_ "highscore" # set value "0"
     timeF <- string "0"
     timer <- UI.timer # set UI.interval 1000
@@ -90,28 +92,23 @@ createLayout window = do
     wipeCanvas
     void $ element canvas # set UI.fillStyle (UI.htmlColor "red")
     UI.fillText "PRESS PLAY TO BEGIN" (100.0, 200.0) canvas
+    void $ element canvas # set UI.fillStyle (UI.htmlColor bgColor)
     return elm
 
 tickActions :: Game -> Behavior Snake -> Behavior [Food] -> Int -> UI ()
-tickActions g bs bf t = return ()
-    {-updateSnake g-}
-    {-updateFood g-}
-    {-st <- liftIO $ readIORef $ state g-}
-    {-let st' = feedSnake st-}
-        {-snake' = snake st'-}
-        {-score' = score st'-}
-        {-t = time st'-}
-        {-newint = truncate-}
-            {-(100.0 - (5.0 * fromIntegral score' / 10.0) :: Double)-}
-    {-when (mod score' 10 == 0) . void $-}
-        {-return timer' # set UI.interval newint-}
-    {-void $ element (curTime g)  # set text (show t)-}
-    {-void $ element (curScore g) # set text (show score')-}
-    {-liftIO . writeIORef (state g) $ st'-}
-    {-drawFood g-}
-    {-when (offside snake') $ gameOver g-}
-{-where-}
-    {-timer' = timer g-}
+tickActions g bs bf t = do
+    let Game {..} = g
+    liftIO . print =<< get value scoreF
+    score <- get value scoreF >>= \s -> return (read s)
+    when (mod score 10 == 0) . void $
+        return timer # set UI.interval (newint score)
+    void $ element timeF # set text (show t)
+    void $ element scoreF # set text (show score)
+    snake <- currentValue bs
+    drawSnake "brown" snake
+    where
+        newint score = truncate
+            (100.0 - (5.0 * fromIntegral score / 10.0) :: Double)
 
 snakeActions :: Game -> Behavior [Food] -> Snake -> UI ()
 snakeActions g bf snake = return ()
@@ -167,9 +164,11 @@ resetGame g s = do
 
 drawSnake :: String -> Snake -> UI ()
 drawSnake color s = do
+    let Snake {..} = s
     c <- getCanvas
+    wipeTail s
     void $ element c # set UI.fillStyle (UI.htmlColor color)
-    mapM_ (\h -> UI.fillRect h m m c) (trunk s)
+    mapM_ (\h -> UI.fillRect h m m c) (init trunk)
     where
         m = fromIntegral marker
 
@@ -223,13 +222,15 @@ drawSnake color s = do
         {-c = canvas g-}
         {-t = timer g-}
 
-{-wipeTail :: Element -> Snake -> UI ()-}
-{-wipeTail c s = do-}
-    {-void $ element c # set UI.fillStyle (UI.htmlColor bgColor)-}
-    {-UI.fillRect h m m c-}
-    {-where-}
-        {-h = last $ trunk s-}
-        {-m = fromIntegral marker-}
+wipeTail :: Snake -> UI ()
+wipeTail s = do
+    canvas <- getCanvas
+    void $ element canvas # set UI.fillStyle (UI.htmlColor bgColor)
+    UI.fillRect h m m canvas
+    where
+        Snake {..} = s
+        h = last trunk
+        m = fromIntegral marker
 
 --feedSnake :: Game -> UI Game
 --feedSnake g@(Game {..}) = do
@@ -268,3 +269,18 @@ drawSnake color s = do
                 {-UI.fillRect (aisle x) m m c-}
         {-m = fromIntegral marker-}
 
+
+greet :: UI Element
+greet = UI.h1  #+ [string "Haskell Interactive Strangler Snake Simulator"]
+
+getCanvas :: UI Element
+getCanvas = do
+    w <- askWindow
+    fromJust <$> getElementById w "canvas"
+
+wipeCanvas :: UI ()
+wipeCanvas = do
+    canvas <- getCanvas
+    UI.clearCanvas canvas
+    void $ element canvas # set UI.fillStyle (UI.htmlColor bgColor)
+    UI.fillRect (0.0, 0.0) width' height' canvas
