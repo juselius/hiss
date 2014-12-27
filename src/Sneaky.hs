@@ -13,17 +13,21 @@ module Sneaky (
     , feedSnake
     , noFood
     , updateFood
-    , deleteNth
+    , expireFood
     , offside
     , keycode
+    , shiftX
     ) where
 
 import Control.Monad
+import Control.Arrow ((***))
 import Data.Maybe
 import Data.List as L
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
 import Types
+
+import Debug.Trace
 
 width, height, marker :: Int
 width = 500
@@ -74,10 +78,10 @@ offside s
 
 moveSnake ::  Snake -> Snake
 moveSnake s@(Snake {..}) =
-    s { trunk = newHead:newTail  }
+    s { trunk = newHead:newTail, stomach = newstomach }
     where
-        newTail = if stomach  < 1
-            then init $ trunk
+        newTail = if stomach < 1
+            then init trunk
             else trunk
         newHead =
             case heading of
@@ -88,20 +92,25 @@ moveSnake s@(Snake {..}) =
                 where
                     (x, y) = head trunk
                     tt = fromIntegral marker
+        newstomach = if stomach > 0 then pred stomach else 0
 
 steerSnake :: Maybe Move -> Snake -> Snake
 steerSnake h s@(Snake {..}) =
     s { heading = maybe heading (validateHeading s) h }
 
-feedSnake :: [Food] -> Snake -> Snake
+feedSnake :: Food -> Snake -> Snake
 feedSnake f s@(Snake {..}) =
-    s { stomach = stomach + if null f then 0 else portionSize (head f) }
+    s { stomach = stomach + portionSize f }
 
 updateFood :: [Food] -> [Food]
-updateFood f = f
-
-deleteNth :: Int -> [a] -> [a]
-deleteNth n f = a ++ tail b
+updateFood = expire . age
     where
-        (a, b) = splitAt n f
+        expire = filter((> 0) . shelfLife)
+        age = map (\x@(Food {..}) -> x { shelfLife = pred shelfLife })
+
+expireFood :: Food -> [Food] -> [Food]
+expireFood f@(Food {..}) fs = f { shelfLife = 0 } : filter (/= f) fs
+
+shiftX :: (Double, Double) -> (Double, Double)
+shiftX = join (***) succ
 
