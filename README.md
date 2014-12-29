@@ -1,7 +1,7 @@
-HISSS
+HISS
 =======
 
-Haskell Interactive Strangler Snake Simulator
+Haskell Interactive Snake Simulator
 
 
 Install
@@ -10,6 +10,6 @@ Install
 ```
 $ cabal configure
 $ cabal build
-$ ./dist/build/hisss.bin/hisss.bin +RTS -N2
+$ ./dist/build/hiss.bin/hiss.bin +RTS -N2
 $ xdg-open http://localhost:8023
 ```

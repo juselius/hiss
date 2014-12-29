@@ -91,9 +91,8 @@ createLayout window = do
         ]
     wipeCanvas
     void $ element canvas # set UI.fillStyle (UI.htmlColor snakeColor)
-    --UI.drawImage pic (10.0, 10.0) canvas
     void $ element canvas # set UI.fillStyle (UI.htmlColor "green")
-    UI.fillText "PRESS NEW GAME TO BEGIN" (100.0, 200.0) canvas
+    UI.fillText "PRESS NEW GAME TO BEGIN" (80.0, 200.0) canvas
     void $ element canvas # set UI.fillStyle (UI.htmlColor bgColor)
     return elm
 
@@ -113,7 +112,6 @@ tickActions g bf fEat bs = do
 
 snakeActions :: Game -> Snake -> UI ()
 snakeActions g snake = do
-    --snake <- currentValue bs
     let Snake {..} = snake
     when (offside snake) $ gameOver g
     drawSnake g snake
@@ -150,7 +148,7 @@ drawFood g food = do
         draw q = do
             let sc = case portionSize q of
                     1 -> "blue"
-                    2 -> "green"
+                    2 -> "magenta"
                     3 -> "red"
                     _ -> bgColor
             void $ element c # set UI.fillStyle (UI.htmlColor sc)
@@ -254,7 +252,7 @@ wipeTail s = do
         m = fromIntegral marker
 
 greet :: UI Element
-greet = UI.h1  #+ [string "Haskell Interactive Strangler Snake Simulator"]
+greet = UI.h1  #+ [string "Haskell Interactive Snake Simulator"]
 
 getCanvas :: UI Element
 getCanvas = do

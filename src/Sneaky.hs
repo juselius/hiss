@@ -40,7 +40,7 @@ height' = fromIntegral height :: Double
 marker' = fromIntegral marker :: Double
 
 bgColor = "white" :: String
-snakeColor = "brown" :: String
+snakeColor = "green" :: String
 
 -- the game board is "upside down", i.e. 0,0 is upper left corner
 keymap :: Int -> Maybe Move
