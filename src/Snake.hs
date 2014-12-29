@@ -87,10 +87,13 @@ createLayout window = do
         , row [element playB
             , UI.pre # set text " SCORE: ", element scoreF
             , UI.pre # set text " HIGHSCORE: ", element highF]
-        ]]
+            ]
+        ]
     wipeCanvas
+    void $ element canvas # set UI.fillStyle (UI.htmlColor snakeColor)
+    --UI.drawImage pic (10.0, 10.0) canvas
     void $ element canvas # set UI.fillStyle (UI.htmlColor "green")
-    UI.fillText "PRESS PLAY TO BEGIN" (100.0, 200.0) canvas
+    UI.fillText "PRESS NEW GAME TO BEGIN" (100.0, 200.0) canvas
     void $ element canvas # set UI.fillStyle (UI.htmlColor bgColor)
     return elm
 
@@ -113,7 +116,7 @@ snakeActions g snake = do
     --snake <- currentValue bs
     let Snake {..} = snake
     when (offside snake) $ gameOver g
-    drawSnake g snakeColor snake
+    drawSnake g snake
 
 genFood :: Behavior Snake -> Behavior [Food] -> Handler Food -> IO ()
 genFood bs bf fNewFood = do
@@ -137,7 +140,6 @@ genFood bs bf fNewFood = do
             where
                 decLife = map (\x -> x { shelfLife = pred $ shelfLife x })
 
-
 drawFood :: Game -> [Food] -> UI ()
 drawFood g food = do
     let Game {..} = g
@@ -145,22 +147,30 @@ drawFood g food = do
     mapM_ clearFood food
     where
         c = canvas g
-        draw x = do
-            let sc = case portionSize x of
+        draw q = do
+            let sc = case portionSize q of
                     1 -> "blue"
                     2 -> "green"
                     3 -> "red"
                     _ -> bgColor
             void $ element c # set UI.fillStyle (UI.htmlColor sc)
-            UI.fillRect (aisle x) m m c
-        clearFood x
-            | shelfLife x < 0 = do
-                void $ element c # set UI.fillStyle (UI.htmlColor snakeColor)
-                UI.fillRect (aisle x) m' m' c
-            | shelfLife x < 1 = do
+            let (x, y) = aisle q
+            UI.fillRect (x + 2.0, y + 2.0) m m c
+        clearFood q
+            | shelfLife q < 0 = do
+                --void $ element c # set UI.fillStyle (UI.htmlColor snakeColor)
+                let drawCircle = do
+                    c # set' UI.fillStyle (UI.htmlColor snakeColor)
+                    c # UI.beginPath
+                    c # UI.arc (x + 10.0, y + 10.0) 12.0 0 (2 * pi)
+                    c # UI.closePath
+                    c # UI.fill
+                drawCircle
+            | shelfLife q < 1 = do
                 void $ element c # set UI.fillStyle (UI.htmlColor bgColor)
-                UI.fillRect (aisle x) m m c
+                UI.fillRect (aisle q) m m c
             | otherwise = return ()
+            where (x, y) = aisle q
         m = fromIntegral marker - 4.0
         m' = fromIntegral marker
 
@@ -173,11 +183,11 @@ resetGame g s = do
     void $ return timer # set UI.interval startInterval
     wipeCanvas
     snake <- currentValue s
-    drawSnake g snakeColor snake
+    drawSnake g snake
     UI.start timer
 
-drawSnake :: Game -> String -> Snake -> UI ()
-drawSnake g color s = do
+drawSnake :: Game -> Snake -> UI ()
+drawSnake g s = do
     let Snake {..} = s
     when (stomach < 1) $ wipeTail s
     void $ element (canvas g) # set UI.fillStyle (UI.htmlColor snakeColor)
@@ -237,10 +247,10 @@ wipeTail :: Snake -> UI ()
 wipeTail s = do
     canvas <- getCanvas
     void $ element canvas # set UI.fillStyle (UI.htmlColor bgColor)
-    UI.fillRect h m m canvas
+    UI.fillRect (x - 2.0, y - 2.0) (m + 4.0) (m + 4.0) canvas
     where
         Snake {..} = s
-        h = last trunk
+        (x, y) = last trunk
         m = fromIntegral marker
 
 greet :: UI Element
