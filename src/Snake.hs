@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
 import Control.Monad
-import Data.Maybe (maybe, fromJust)
+import Data.Maybe (isJust, fromJust)
 import Data.List (partition, find)
 import Data.IORef
 import System.Random (randomRIO)
@@ -27,8 +27,7 @@ setup window = void $ do
     (eEat, fEat) <- liftIO UI.newEvent
     let eTick   = (+1) <$ UI.tick timer
         eReset  = const (0::Int) <$ UI.click playB
-        ePause  = UI.click pauseB
-        eKey    = keycode <$> UI.keydown bdy
+        eKey    = keymap <$> UI.keydown bdy
         eTimer  = head <$> unions [eTick, eReset]
         eSnakeT = head <$> unions [
               moveSnake <$ eTick
@@ -54,10 +53,9 @@ setup window = void $ do
     element scoreF # sink text (show <$> bScore)
     element scoreF # sink value (show <$> bScore)
     onEvent eReset . const $ do wipeCanvas; UI.start timer
-    onEvent ePause . const $ UI.stop timer
-    onChanges bTimer $ tickActions game bSnake
+    onChanges bTimer . const $ tickActions game bFood fEat bSnake
     onChanges bTimer . const . liftIO $ genFood bSnake bFood fNewFood
-    onChanges bTimer . const $ snakeActions game bFood fEat bSnake
+    onChanges bSnake $ snakeActions game
     onChanges bFood  $ drawFood game
 
 uiElements :: UI Game
@@ -69,16 +67,12 @@ uiElements =  do
         # set style [("border", "solid black 5px")]
         # set UI.textFont "24px sans-serif"
     playB <- UI.button #. "button" # set text "New game"
-    pauseB <- UI.button #. "button" # set text "Pause"
     scoreF <- string "0"# set value "0"
     highF <- string "0" # set UI.id_ "highscore" # set value "0"
-    timeF <- string "0"
-    timer <- UI.timer # set UI.interval 1000
+    timer <- UI.timer # set UI.interval startInterval
     return Game {
           canvas  = canvas
         , playB   = playB
-        , pauseB  = pauseB
-        , timeF   = timeF
         , scoreF  = scoreF
         , highF   = highF
         , timer   = timer
@@ -90,39 +84,36 @@ createLayout window = do
     void $ getBody window #. "wrap" #+ [column [
           greet
         , element canvas
-        , row [element playB, element pauseB
+        , row [element playB
             , UI.pre # set text " SCORE: ", element scoreF
             , UI.pre # set text " HIGHSCORE: ", element highF]
-        , row [string "t = ", element timeF]
         ]]
     wipeCanvas
-    void $ element canvas # set UI.fillStyle (UI.htmlColor "red")
+    void $ element canvas # set UI.fillStyle (UI.htmlColor "green")
     UI.fillText "PRESS PLAY TO BEGIN" (100.0, 200.0) canvas
     void $ element canvas # set UI.fillStyle (UI.htmlColor bgColor)
     return elm
 
-tickActions :: Game -> Behavior Snake -> Int -> UI ()
-tickActions g bs t = do
+tickActions :: Game -> Behavior [Food] -> Handler Food -> Behavior Snake -> UI ()
+tickActions g bf fEat bs = do
     let Game {..} = g
     score <- getScore g
     when (mod score 10 == 0) . void $
         return timer # set UI.interval (newint score)
-    void $ element timeF # set text (show t)
     void $ element scoreF # set text (show score)
     snake <- currentValue bs
-    drawSnake "brown" snake
-    where
-        newint score = truncate
-            (100.0 - (5.0 * fromIntegral score / 10.0) :: Double)
-
-snakeActions :: Game -> Behavior [Food] -> Handler Food -> Behavior Snake
-    -> UI ()
-snakeActions g bf fEat bSnake = do
-    snake <- currentValue bSnake
-    let Snake {..} = snake
     food <- currentValue bf
-    let snack = find (\x -> aisle x == head trunk) food
-    maybe (when (offside snake) $ gameOver g) (liftIO . fEat) snack
+    let snack = find (\x -> aisle x == head (trunk snake)) food
+    when (isJust snack) $ liftIO . fEat $ fromJust snack
+    where
+        newint score = startInterval - 5 * fromIntegral score `div` 10
+
+snakeActions :: Game -> Snake -> UI ()
+snakeActions g snake = do
+    --snake <- currentValue bs
+    let Snake {..} = snake
+    when (offside snake) $ gameOver g
+    drawSnake g snakeColor snake
 
 genFood :: Behavior Snake -> Behavior [Food] -> Handler Food -> IO ()
 genFood bs bf fNewFood = do
@@ -146,6 +137,7 @@ genFood bs bf fNewFood = do
             where
                 decLife = map (\x -> x { shelfLife = pred $ shelfLife x })
 
+
 drawFood :: Game -> [Food] -> UI ()
 drawFood g food = do
     let Game {..} = g
@@ -160,11 +152,17 @@ drawFood g food = do
                     3 -> "red"
                     _ -> bgColor
             void $ element c # set UI.fillStyle (UI.htmlColor sc)
-            UI.fillRect (shiftX $ aisle x) m m c
-        clearFood x = when (shelfLife x < 1) $ do
+            UI.fillRect (aisle x) m m c
+        clearFood x
+            | shelfLife x < 0 = do
+                void $ element c # set UI.fillStyle (UI.htmlColor snakeColor)
+                UI.fillRect (aisle x) m' m' c
+            | shelfLife x < 1 = do
                 void $ element c # set UI.fillStyle (UI.htmlColor bgColor)
-                UI.fillRect (shiftX $ aisle x) m m c
-        m = fromIntegral marker - 2.0
+                UI.fillRect (aisle x) m m c
+            | otherwise = return ()
+        m = fromIntegral marker - 4.0
+        m' = fromIntegral marker
 
 getScore :: Game -> UI Int
 getScore g = get value (scoreF g) >>= \x -> return (read x :: Int)
@@ -172,26 +170,53 @@ getScore g = get value (scoreF g) >>= \x -> return (read x :: Int)
 resetGame :: Game -> Behavior Snake -> UI ()
 resetGame g s = do
     let Game {..} = g
-    void $ return timer # set UI.interval 100
+    void $ return timer # set UI.interval startInterval
     wipeCanvas
     snake <- currentValue s
-    drawSnake "brown" snake
+    drawSnake g snakeColor snake
     UI.start timer
 
-drawSnake :: String -> Snake -> UI ()
-drawSnake color s = do
+drawSnake :: Game -> String -> Snake -> UI ()
+drawSnake g color s = do
     let Snake {..} = s
-    c <- getCanvas
-    wipeTail s
-    void $ element c # set UI.fillStyle (UI.htmlColor color)
-    mapM_ (\h -> UI.fillRect (shiftX h) m m c) (init trunk)
+    when (stomach < 1) $ wipeTail s
+    void $ element (canvas g) # set UI.fillStyle (UI.htmlColor snakeColor)
+    drawSnakeElement g s
+
+drawSnakeElement :: Game -> Snake -> UI ()
+drawSnakeElement g snake = do
+    let Snake {..} = snake
+        p@(x, y) = head trunk
+        up  = UI.fillRect (x + 2.0, y + 2.0) (m - 2.0) m c
+        dn  = UI.fillRect (x + 2.0, y      ) (m - 2.0) m c
+        rht = UI.fillRect (x      , y + 2.0) m (m - 2.0) c
+        lft = UI.fillRect (x + 2.0, y + 2.0) m (m - 2.0) c
+        ud  = UI.fillRect (x + 2.0, y) (m - 2.0) m' c
+        rl  = UI.fillRect (x, y + 2.0) m' (m - 2.0) c
+    void $ element (canvas g) # set UI.fillStyle (UI.htmlColor bgColor)
+    UI.fillRect p m' m' c
+    void $ element (canvas g) # set UI.fillStyle (UI.htmlColor snakeColor)
+    case corner of
+        (U, R) -> up >> lft
+        (U, L) -> up >> rht
+        (D, R) -> dn >> lft
+        (D, L) -> dn >> rht
+        (R, U) -> rht >> dn
+        (R, D) -> rht >> up
+        (L, U) -> lft >> dn
+        (L, D) -> lft >> up
+        (U, _) -> ud
+        (D, _) -> ud
+        (R, _) -> rl
+        (L, _) -> rl
     where
-        m = fromIntegral marker - 2.0
+        m' = fromIntegral marker
+        m = m' - 2.0
+        c = canvas g
 
 gameOver :: Game -> UI ()
 gameOver g = void $ do
     let Game {..} = g
-
     UI.stop timer
     wipeCanvas
     void $ element canvas # set UI.fillStyle (UI.htmlColor "red")
@@ -212,11 +237,11 @@ wipeTail :: Snake -> UI ()
 wipeTail s = do
     canvas <- getCanvas
     void $ element canvas # set UI.fillStyle (UI.htmlColor bgColor)
-    UI.fillRect (shiftX h) m m canvas
+    UI.fillRect h m m canvas
     where
         Snake {..} = s
         h = last trunk
-        m = fromIntegral marker - 2.0
+        m = fromIntegral marker
 
 greet :: UI Element
 greet = UI.h1  #+ [string "Haskell Interactive Strangler Snake Simulator"]

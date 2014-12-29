@@ -51,17 +51,18 @@ keymap k = case k of
         40 -> Just D -- key down
         _ -> Nothing
 
-validateHeading :: Snake -> Move -> Move
+validateHeading :: Snake -> Maybe Move -> Move
 validateHeading s k = case k of
-        R -> check L R
-        D -> check U D
-        L -> check R L
-        U -> check D U
+        Just R -> check L R
+        Just D -> check U D
+        Just L -> check R L
+        Just U -> check D U
+        Nothing -> heading s
     where
         check x y = if heading s == x then x else y
 
 newSnake :: Int -> Snake
-newSnake n = Snake [(fromIntegral $ marker * x, 100.0) | x <- body] R 0
+newSnake n = Snake [(fromIntegral $ marker * x, 100.0) | x <- body] R 0 (R, R)
     where
         body = [n,(n-1)..1]
 
@@ -79,8 +80,11 @@ offside s
         b = tail $ trunk s
 
 moveSnake ::  Snake -> Snake
-moveSnake s@(Snake {..}) =
-    s { trunk = newHead:newTail, stomach = newstomach }
+moveSnake s@(Snake {..}) = s {
+      trunk = newHead:newTail
+    , stomach = newstomach
+    , corner = (heading, heading)
+    }
     where
         newTail = if stomach < 1
             then init trunk
@@ -97,8 +101,12 @@ moveSnake s@(Snake {..}) =
         newstomach = if stomach > 0 then pred stomach else 0
 
 steerSnake :: Maybe Move -> Snake -> Snake
-steerSnake h s@(Snake {..}) =
-    s { heading = maybe heading (validateHeading s) h }
+steerSnake mv s@(Snake {..}) = s {
+      heading = h
+    , corner = (heading, h)
+    }
+    where
+        h = validateHeading s mv
 
 feedSnake :: Food -> Snake -> Snake
 feedSnake f s@(Snake {..}) = s { stomach = stomach + portionSize f }

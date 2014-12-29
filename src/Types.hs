@@ -7,10 +7,8 @@ import Data.IORef
 data Game = Game {
       canvas  :: Element
     , playB   :: Element
-    , pauseB  :: Element
     , scoreF  :: Element
     , highF   :: Element
-    , timeF   :: Element
     , timer   :: UI.Timer
     }
 
@@ -18,6 +16,7 @@ data Snake = Snake {
       trunk :: [(Double, Double)]
     , heading :: Move
     , stomach :: Int
+    , corner :: (Move, Move)
     } deriving (Show)
 
 data Food = Food {
