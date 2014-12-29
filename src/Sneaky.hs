@@ -7,6 +7,8 @@ module Sneaky (
     , width'
     , height'
     , bgColor
+    , snakeColor
+    , startInterval
     , newSnake
     , moveSnake
     , steerSnake
@@ -15,46 +17,46 @@ module Sneaky (
     , updateFood
     , expireFood
     , offside
-    , keycode
+    , keymap
     , shiftX
+    , markerX
     ) where
 
 import Control.Monad
-import Control.Arrow ((***))
+import Control.Arrow ((***), first, second)
 import Data.Maybe
 import Data.List as L
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
 import Types
 
-import Debug.Trace
+width = 500 :: Int
+height = 400 :: Int
+marker = 20 :: Int
+startInterval = 100 :: Int
 
-width, height, marker :: Int
-width = 500
-height = 400
-marker = 20
+width' = fromIntegral width :: Double
+height' = fromIntegral height :: Double
+marker' = fromIntegral marker :: Double
 
-width', height' :: Double
-width' = fromIntegral width
-height' = fromIntegral height
+bgColor = "white" :: String
+snakeColor = "brown" :: String
 
-bgColor :: String
-bgColor = "white"
-
-keycode :: Int -> Maybe Move
-keycode k = case k of
-        37 -> Just R
-        38 -> Just D
-        39 -> Just L
-        40 -> Just U
+-- the game board is "upside down", i.e. 0,0 is upper left corner
+keymap :: Int -> Maybe Move
+keymap k = case k of
+        37 -> Just L -- key right
+        38 -> Just U -- key up
+        39 -> Just R -- key left
+        40 -> Just D -- key down
         _ -> Nothing
 
 validateHeading :: Snake -> Move -> Move
 validateHeading s k = case k of
-        R -> check R L
-        D -> check D U
-        L -> check L R
-        U -> check U D
+        R -> check L R
+        D -> check U D
+        L -> check R L
+        U -> check D U
     where
         check x y = if heading s == x then x else y
 
@@ -99,8 +101,7 @@ steerSnake h s@(Snake {..}) =
     s { heading = maybe heading (validateHeading s) h }
 
 feedSnake :: Food -> Snake -> Snake
-feedSnake f s@(Snake {..}) =
-    s { stomach = stomach + portionSize f }
+feedSnake f s@(Snake {..}) = s { stomach = stomach + portionSize f }
 
 updateFood :: [Food] -> [Food]
 updateFood = expire . age
@@ -109,8 +110,21 @@ updateFood = expire . age
         age = map (\x@(Food {..}) -> x { shelfLife = pred shelfLife })
 
 expireFood :: Food -> [Food] -> [Food]
-expireFood f@(Food {..}) fs = f { shelfLife = 0 } : filter (/= f) fs
+expireFood f@(Food {..}) fs = f { shelfLife = -1 } : filter (/= f) fs
 
-shiftX :: (Double, Double) -> (Double, Double)
-shiftX = join (***) succ
+shiftX :: Move -> (Double, Double) -> (Double, Double)
+shiftX h = case h of
+    U -> first f
+    D -> first f
+    R -> second f
+    L -> second f
+    where
+        f = succ . succ
+
+markerX :: Move -> (Double, Double)
+markerX h = case h of
+    U -> (marker' - 4.0, marker')
+    D -> (marker' - 4.0, marker')
+    R -> (marker', marker' - 4.0)
+    L -> (marker', marker' - 4.0)
 
