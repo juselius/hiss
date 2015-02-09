@@ -22,24 +22,34 @@ module Sneaky (
     , markerX
     ) where
 
-import Control.Monad
-import Control.Arrow ((***), first, second)
-import Data.Maybe
-import Data.List as L
-import qualified Graphics.UI.Threepenny as UI
-import Graphics.UI.Threepenny.Core
+import Control.Arrow (first, second)
 import Types
 
-width = 500 :: Int
-height = 400 :: Int
-marker = 20 :: Int
-startInterval = 100 :: Int
+width :: Int
+width = 500
 
-width' = fromIntegral width :: Double
-height' = fromIntegral height :: Double
-marker' = fromIntegral marker :: Double
+height :: Int
+height = 400
 
+marker :: Int
+marker = 20
+
+startInterval :: Int
+startInterval = 100
+
+width' :: Double
+width' = fromIntegral width
+
+height' :: Double
+height' = fromIntegral height
+
+marker' :: Double
+marker' = fromIntegral marker
+
+bgColor :: String
 bgColor = "white" :: String
+
+snakeColor :: String
 snakeColor = "green" :: String
 
 -- the game board is "upside down", i.e. 0,0 is upper left corner

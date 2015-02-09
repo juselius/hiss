@@ -1,17 +1,15 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
-import Control.Monad
-import Data.Maybe (isJust, fromJust)
-import Data.List (partition, find)
-import Data.IORef
+import Control.Monad hiding (forM_)
+import Data.Maybe (fromJust)
+import Data.List (find)
+import Data.Foldable (forM_)
 import System.Random (randomRIO)
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
 import Sneaky
 
-import Debug.Trace
-
-type Gamer = UI Game -> UI Game
+--import Debug.Trace
 
 main :: IO ()
 main = startGUI defaultConfig { tpStatic = Just "static" } setup
@@ -50,8 +48,8 @@ setup window = void $ do
     bFood <- accumB noFood eFoodT
     bSnake <- accumB (newSnake 5) eSnakeT
 
-    element scoreF # sink text (show <$> bScore)
-    element scoreF # sink value (show <$> bScore)
+    void $ element scoreF # sink text (show <$> bScore)
+    void $ element scoreF # sink value (show <$> bScore)
     onEvent eReset . const $ do wipeCanvas; UI.start timer
     onChanges bTimer . const $ tickActions game bFood fEat bSnake
     onChanges bTimer . const . liftIO $ genFood bSnake bFood fNewFood
@@ -106,7 +104,7 @@ tickActions g bf fEat bs = do
     snake <- currentValue bs
     food <- currentValue bf
     let snack = find (\x -> aisle x == head (trunk snake)) food
-    when (isJust snack) $ liftIO . fEat $ fromJust snack
+    forM_ snack $ liftIO . fEat
     where
         newint score = startInterval - 5 * fromIntegral score `div` 10
 
@@ -133,10 +131,10 @@ genFood bs bf fNewFood = do
             let x' = fromIntegral $ x * marker
                 y' = fromIntegral $ y * marker
             return $ Food (x', y') psize slife
-        cropFood f =
-                filter (\x -> shelfLife x >= 0) $ decLife f
-            where
-                decLife = map (\x -> x { shelfLife = pred $ shelfLife x })
+        --cropFood f =
+                --filter (\x -> shelfLife x >= 0) $ decLife f
+            --where
+                --decLife = map (\x -> x { shelfLife = pred $ shelfLife x })
 
 drawFood :: Game -> [Food] -> UI ()
 drawFood g food = do
@@ -157,32 +155,31 @@ drawFood g food = do
         clearFood q
             | shelfLife q < 0 = do
                 --void $ element c # set UI.fillStyle (UI.htmlColor snakeColor)
-                let drawCircle = do
+                --let drawCircle = do
                     c # set' UI.fillStyle (UI.htmlColor snakeColor)
                     c # UI.beginPath
                     c # UI.arc (x + 10.0, y + 10.0) 12.0 0 (2 * pi)
                     c # UI.closePath
                     c # UI.fill
-                drawCircle
+                --drawCircle
             | shelfLife q < 1 = do
                 void $ element c # set UI.fillStyle (UI.htmlColor bgColor)
                 UI.fillRect (aisle q) m m c
             | otherwise = return ()
             where (x, y) = aisle q
         m = fromIntegral marker - 4.0
-        m' = fromIntegral marker
 
 getScore :: Game -> UI Int
 getScore g = get value (scoreF g) >>= \x -> return (read x :: Int)
 
-resetGame :: Game -> Behavior Snake -> UI ()
-resetGame g s = do
-    let Game {..} = g
-    void $ return timer # set UI.interval startInterval
-    wipeCanvas
-    snake <- currentValue s
-    drawSnake g snake
-    UI.start timer
+--resetGame :: Game -> Behavior Snake -> UI ()
+--resetGame g s = do
+    --let Game {..} = g
+    --void $ return timer # set UI.interval startInterval
+    --wipeCanvas
+    --snake <- currentValue s
+    --drawSnake g snake
+    --UI.start timer
 
 drawSnake :: Game -> Snake -> UI ()
 drawSnake g s = do
